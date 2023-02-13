@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request
 
 ORDER_FIELD_OID = "oid"
-ORDER_REQUIRED_PARAMETERS = ("name", "exp_time", "fee", "location", "group_link")
+ORDER_REQUIRED_PARAMETERS = ("name", "exp_time", "fee", "location", "group_link", "category")
+ORDER_CATEGORY = ('치킨', '피자', '양식', '한식', '중식', '일식', '분식', '야식', '간식')
 
 RES_STATUS_KEY = "status"
 RES_DATA_KEY = "data"
@@ -15,16 +16,16 @@ STATUS_NOT_FOUND = 404
 
 
 class Order():
-    def __init__(self, oid, name, exp_time, fee, location, group_link):
+    def __init__(self, oid, name, exp_time, fee, location, group_link, category):
         self.oid = oid
         self.name = name
         self.exp_time = exp_time
         self.fee = fee
         self.location = location
         self.group_link = group_link
+        self.category = category
 
-    ## todo: 함수 이름 수정 필요..(json을 반환하지 않음)
-    def get_json_from_order(self):
+    def get_data_from_order(self):
         res = {}
         res["oid"] = self.oid
         res["name"] = self.name
@@ -32,6 +33,7 @@ class Order():
         res["fee"] = self.fee
         res["location"] = self.location
         res["group_link"] = self.group_link
+        res["category"] = self.category
         return res
 
 
@@ -61,19 +63,36 @@ app.orders = {}
 
 # 메인 페이지 
 
+
+
+## todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
 # 마이 페이지
 
 ## todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
 # 로그인 페이지
 
 
-## todo: 어떤 게시판인지(치킨, 피자 등) parameter로 넘겨줘야 하지 않나요? 
+## todo: 어떤 게시판인지(치킨, 피자 등) parameter로 넘겨줘야 함
 # 게시판 페이지
 @app.route("/board/list", methods=['GET'])
 def board_list():
+    req_category = request.args.to_dict()
+    if not "category" in req_category:
+        res = {}
+        res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
+        res[RES_ERROR_MESSAGE] = "Not exist required parameter: category"
+        return jsonify(res)
+    
+    if not req_category["category"] in ORDER_CATEGORY:
+        res = {}
+        res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
+        res[RES_ERROR_MESSAGE] = "User sended a category which doesn't exist: " + req_category["category"]
+        return jsonify(res)
+
     board = []
     for i in app.orders:
-        board.append(app.orders[i].get_json_from_order())
+        if app.orders[i].category == req_category["category"]: 
+            board.append(app.orders[i].get_data_from_order())
 
     res = {}
     res[RES_STATUS_KEY] = STATUS_REQUEST_SUCCESS
@@ -81,13 +100,12 @@ def board_list():
     return jsonify(res)
     
 
-## todo: 각 모임을 카테고리(치킨, 피자 등)으로 구분해야 하지 않나요?
 # 모임 생성 페이지
 @app.route("/order/create", methods=['POST'])
 def order_create():
     req = request.form
     for param in ORDER_REQUIRED_PARAMETERS:
-        ## todo: error message에 부족한 paramter 2개 이상 알려줄 수 없음. 수정필요
+        ## todo: error message에 부족한 paramter가 2개 이상 일때 알려줄 수 없음. 수정필요
         if not json_has_key(req, param):
             res = {}
             res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
@@ -100,12 +118,11 @@ def order_create():
 
     res = {}
     res[RES_STATUS_KEY] = STATUS_CREATE_SUCCESS
-    res[RES_DATA_KEY] = new_order.get_json_from_order()
+    res[RES_DATA_KEY] = new_order.get_data_from_order()
     
     return jsonify(res)
 
 
-## todo: 각 모임을 카테고리(치킨, 피자 등)으로 구분해야 하지 않나요?
 # 모임 상세 페이지
 @app.route("/order/detail", methods=['GET'])
 def order_detail():
@@ -115,10 +132,16 @@ def order_detail():
         res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
         res[RES_ERROR_MESSAGE] = "Not exist required parameter: oid"
         return jsonify(res)
+    
+    if int(req_param["oid"]) > (app.order_count-1) or int(req_param["oid"]) < 0:
+        res = {}
+        res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
+        res[RES_ERROR_MESSAGE] = "User sended an oid which doesn't exist: " + req_param["oid"]
+        return jsonify(res)
 
 
     order = app.orders[int(req_param["oid"])]
     res = {}
     res[RES_STATUS_KEY] = STATUS_REQUEST_SUCCESS
-    res[RES_DATA_KEY] = order.get_json_from_order()
+    res[RES_DATA_KEY] = order.get_data_from_order()
     return jsonify(res)
