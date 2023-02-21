@@ -1,4 +1,37 @@
 from flask import Flask, jsonify, request
+import sqlite3
+
+connect = sqlite3.connect("test.db", isolation_level=None)
+cursor = connect.cursor()
+# 테이블 생성 (데이터 타입은 TEST, NUMERIC, INTEGER, REAL, BLOB 등)
+
+# User info 테이블 생성
+cursor.execute("CREATE TABLE IF NOT EXISTS user \
+    (uid integer PRIMARY KEY, name text NOT NULL, phone_number text NOT NULL, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
+
+# User auth table
+cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
+    (uid integer PRIMARY KEY, exp_time DATETIME NOT NULL, auth_number text NOT NULL, \
+        FOREIGN KEY(uid) REFERENCES user(uid))")
+
+# Restraunt info 테이블 생성
+cursor.execute("CREATE TABLE IF NOT EXISTS restraunt \
+    (rid integer PRIMARY KEY, name text NOT NULL, location text NOT NULL, category text, fee integer NOT NULL)")
+
+# Restraunt menu 테이블
+cursor.execute("CREATE TABLE IF NOT EXISTS restraunt_menu \
+    (rid integer, menu text, PRIMARY KEY (rid, menu), \
+        FOREIGN KEY (rid) REFERENCES restraunt(rid) )")
+
+# Order info 테이블 생성
+cursor.execute("CREATE TABLE IF NOT EXISTS order_info \
+    (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, meeting_place text NOT NULL, group_link text NOT NULL, rid integer, uid integer, \
+        FOREIGN KEY (rid) REFERENCES restraunt(rid), FOREIGN KEY (uid) REFERENCES user(uid) )")
+
+# User - Order
+cursor.execute("CREATE TABLE IF NOT EXISTS user_order_relationship \
+    (uid integer, oid integer, PRIMARY KEY (uid, oid), \
+        FOREIGN KEY (uid) REFERENCES restraunt(uid), FOREIGN KEY (oid) REFERENCES restraunt(oid) )")
 
 ORDER_FIELD_OID = "oid"
 ORDER_REQUIRED_PARAMETERS = ("name", "exp_time", "fee", "location", "group_link", "category")
@@ -37,8 +70,6 @@ class Order():
         return res
 
 
-
-
 # json에 key가 존재하는지 확인
 def json_has_key(json, key):
     try:
@@ -48,12 +79,11 @@ def json_has_key(json, key):
 
     return True
 
+
 # app.orders에 새로운 order 삽입
 def put_order(order):
     app.orders[app.order_count] = order
     app.order_count = app.order_count + 1
-
-
 
 
 app = Flask(__name__)
@@ -64,15 +94,14 @@ app.orders = {}
 # 메인 페이지 
 
 
-
-## todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
+# todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
 # 마이 페이지
 
-## todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
+# todo: 유저 생성(회원가입) 관련 api 설계하지 않음.
 # 로그인 페이지
 
 
-## todo: 어떤 게시판인지(치킨, 피자 등) parameter로 넘겨줘야 함
+# todo: 어떤 게시판인지(치킨, 피자 등) parameter로 넘겨줘야 함
 # 게시판 페이지
 @app.route("/board/list", methods=['GET'])
 def board_list():
@@ -82,7 +111,6 @@ def board_list():
         res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
         res[RES_ERROR_MESSAGE] = "Not exist required parameter: category"
         return jsonify(res)
-    
     if not req_category["category"] in ORDER_CATEGORY:
         res = {}
         res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
