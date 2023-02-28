@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request 
 from flask_api import status
 # from flask_jwt_extended import JWTManager
 import sqlite3
@@ -7,6 +7,8 @@ from email.mime.text import MIMEText
 from random import randrange
 from datetime import datetime, timedelta
 import re
+import bycrypt
+import PyJWT
 
 DATABASE = "test.db"
 connect = sqlite3.connect(DATABASE, isolation_level=None)
@@ -14,11 +16,11 @@ cursor = connect.cursor()
 
 # User info 테이블 생성
 cursor.execute("CREATE TABLE IF NOT EXISTS user \
-    (uid integer PRIMARY KEY, name text NOT NULL, email_address text NOT NULL, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    (uid integer PRIMARY KEY, name text, email_address text NOT NULL, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
-# User auth 테이블 생성
+# User auth 테이블 생성 (uid 근원)
 cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-    (uid integer PRIMARY KEY, exp_time DATETIME NOT NULL, auth_number text NOT NULL, \
+    (uid integer PRIMARY KEY, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text \
         FOREIGN KEY(uid) REFERENCES user(uid))")
 
 # restaurant info 테이블 생성
@@ -167,11 +169,49 @@ def login_send_auth_number():
     smtp.quit()
 
     exp_time = datetime.now() + timedelta(minutes=5)
-    cursor.execute("INSERT INTO user_auth(uid, exp_time, auth_number) VALUES(?, ?, ?)", (uid, exp_time, auth_number))
+    cursor.execute("INSERT INTO user_auth(uid, exp_time, auth_number, verified) VALUES(?, ?, ?, ?)", (uid, exp_time, auth_number, "'FALSE'"))
 
     return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_EXP_TIME: exp_time}, status.HTTP_201_CREATED
 
 # 로그인 - 인증번호 확인
+@app.route("/login/verify_auth_number", methods=['POST'])
+def verify_auth_number():
+    # parameter 확인
+    req = request.args.to_dict()
+
+    auth_required_parameter = ("uid", "auth_number")
+    for param in auth_required_parameter:
+        if not json_has_key(req, param):
+            res = {}
+            res[RES_STATUS_KEY] = STATUS_BAD_REQUEST
+            res[RES_ERROR_MESSAGE] = "Not exist required parameter: " + param
+            return jsonify(res)
+
+    # DB에서 인증번호 유효성 확인
+    cursor.execute('SELECT uid, auth_number, auth_time FROM user_auth WHERE uid ="{}"'.format(req["uid"]))
+    user_auth_list = cursor.fetchall()
+    if len(user_auth_list) == 0:
+        return "", status.HTTP_403_FORBIDDEN
+    # Now, we can ensure that only one tuple is there
+    uid, auth_number, auth_time = user_auth_list[0]
+
+    # wrong auth number
+    if (auth_number != req["auth_number"])
+        return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST
+    # 만료된 인증정보
+    if (auth_time > datetime.now() + timedelta(days=90))
+        return {RES_STATUS_KEY: status.HTTP_406_NOT_ACCEPTABLE}, status.HTTP_406_NOT_ACCEPTABLE
+
+    current_time = datetime.now()
+    # verified
+    cursor.execute('UPDATE user_auth SET verified={} WHERE uid="{}"'.format("TRUE", uid))
+
+    # 유저 정보로 bcrypt -> hash 값 기반으로 JWT token 발행
+    encrypted_password = bcrypt.hashpw(str(uid) + str(auth_number), bcrypt.gensalt()).decode("utf-8") # str 객체, bytes로 인코드, salt를 이용하여 암호화
+    token = jwt.encode(encrypted_password, HEXA_DELIVERY_AXEH, algorithm="HS256")
+
+    # RETURN UID, JWT
+    return ""
 
 # 로그인 페이지
 
