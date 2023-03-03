@@ -50,7 +50,9 @@ RES_DATA_KEY = "data"
 RES_ERROR_MESSAGE = "error_message"
 
 SECURE_CONFIG_JWT_FIELD = "jwt_secret_key"
+SECURE_CONFIG_ENCRYPTED_FIELD = "encrypted_key"
 JWT_SECRET_KEY = server_secure_config[SECURE_CONFIG_JWT_FIELD]
+ENCRYPTED_KEY = server_secure_config[SECURE_CONFIG_ENCRYPTED_FIELD]
 
 class OrderDAO():
     def __init__(self, oid, exp_time, meeting_place, group_link, rid, member_num, uid):
@@ -144,8 +146,22 @@ def json_has_key(json, key):
 
     return True
 
+def verify_jwt_token(token, uid, auth_number):
+    # Extract Password from JWT Token
+    password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"].encode("utf-8")
+
+    # Hash UID and Auth number again (bcrypt)
+    # hash_uid_authnum = bcrypt.hashpw((uid + auth_number).encode("utf-8"), ENCRYPTED_KEY).decode("utf-8")
+
+    # Compare two strings and return the result
+    checkPw = bcrypt.checkpw(password, (uid+auth_number).encode("utf-8"))
+    if(checkPw):
+        return True
+    
+    return False
 
 app = Flask(__name__)
+
 
 # 메인 페이지
 '''
@@ -202,16 +218,17 @@ def login_send_auth_number():
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: 'email validation error'}, status.HTTP_400_BAD_REQUEST
 
     # 인증번호 생성 및 email 발송
-    smtp = smtplib.SMTP('smtp.office365.com', 587)
+    smtp = smtplib.SMTP('smtp.naver.com', 587)
     smtp.ehlo()
     smtp.starttls()
-    smtp.login('hexa_delivery@outlook.kr', 'HeXA.pro*')
+    smtp.login('hexa_delivery@naver.com', 'HeXA.pro*')
 
     auth_number = randrange(10000)
     msg = MIMEText('{}'.format(auth_number))
+    msg['From'] = 'hexa_delivery@naver.com'
     msg['Subject'] = '테스트'
-    msg['To'] = req_email_address
-    smtp.sendmail('hexa_delivery@outlook.kr', '{}'.format(req_email_address), msg.as_string())
+    msg['To'] = req['email_address']
+    smtp.sendmail('hexa_delivery@naver.com', '{}'.format(req['email_address']), msg.as_string())
     smtp.quit()
 
     # 만료시간은 현재시간 + 5분
@@ -247,7 +264,7 @@ def verify_auth_number():
     req = request.args.to_dict()
 
     # 필수 parameter 확인: uid, email_address, auth_number
-    auth_required_parameter = ("uid", "email_address", "auth_number")
+    auth_required_parameter = ("uid", "auth_number")
     for param in auth_required_parameter:
         if not json_has_key(req, param):
             res = {}
@@ -281,7 +298,14 @@ def verify_auth_number():
     cursor.execute('UPDATE user_auth SET verified={} WHERE uid="{}"'.format("TRUE", uid))
 
     # DB에 유저 정보 저장
-    cursor.execute("INSERT INTO user(uid, email_address, auth_time) VALUES(?, ?, ?)", (uid, req["email_address"], datetime.now() + timedelta(days= 90)))
+    cursor.execute('SELECT * FROM user WHERE uid={}'.format(uid))
+    u = cursor.fetchall()
+
+    # 새로운 유저
+    if(len(u)==0): 
+        cursor.execute("INSERT INTO user(uid, auth_time) VALUES(?, ?)", (uid, datetime.now() + timedelta(days=90)))
+    else: # 이미 존재하는 유저
+        cursor.execute('UPDATE user SET auth_time="{}" WHERE uid="{}"'.format(datetime.now() + timedelta(days=90), uid))
 
     connect.commit()
 
@@ -293,30 +317,38 @@ def verify_auth_number():
     jwt_token = jwt.encode(password_json, JWT_SECRET_KEY, algorithm="HS256")
 
     # RETURN UID, JWT
-    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, "jwt": jwt_token}}, status.HTTP_201_CREATED
+    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, "access_token": jwt_token}}, status.HTTP_201_CREATED
 
-# todo: jwt 토큰 사용처 확인
 # 유저 정보 확인
+# null인지 확인해서 수정 요청 status 412
 @app.route("/user/info", methods=['GET'])
 def user_info():
     req_header = request.headers
     req_body = request.args.to_dict()
 
     # 필수 parameter 확인
-    if 'jwt_token' not in request.req_header:
+    if 'access_token' not in req_header:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist header: jwt_token"
+        res[RES_ERROR_MESSAGE] = "not exist header: access_token"
         return jsonify(res)
     if 'uid' not in req_body:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
         res[RES_ERROR_MESSAGE] = "not exist required parameter: uid"
         return jsonify(res)
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
+
+    # jwt 토큰 유효성 확인
+    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(req_body["uid"]))
+    auth_num = cursor.fetchall()[0][0]
+    isVerifed = verify_jwt_token(req_header["access_token"], req_body["uid"], auth_num)
+
+    if (~isVerifed):
+        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
 
     # 유저 정보 SELECT
     cursor.execute("SELECT uid, name, email_address FROM user WHERE uid='{}'".format(req_body["uid"]))
@@ -326,9 +358,9 @@ def user_info():
 
     # 존재하지 않는 uid
     if(len(u) == 0):
-        return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_400_BAD_REQUEST
+        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_404_NOT_FOUND
 
-    # OrderDetailDTO 인스턴스 생성
+    # userDTO 인스턴스 생성
     user = userDTO(u[0])
 
     res = {}
@@ -362,11 +394,19 @@ def user_update():
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
+    # jwt 토큰 유효성 확인
+    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(req_body["uid"]))
+    auth_num = cursor.fetchall()[0]
+    isVerifed = verify_jwt_token(req_header["jwt_token"], req_body["uid"], auth_num)
+
+    if (~isVerifed):
+        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
+
     # 존재하지 않는 uid 케이스 처리
     cursor.execute("SELECT * FROM user WHERE uid='{}'".format(req_body["uid"]))
     uid_check = cursor.fetchall()
     if(len(uid_check) == 0):
-        return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_400_BAD_REQUEST
+        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_404_NOT_FOUND
 
     # 유저 정보 UPDATE
     cursor.execute("UPDATE user SET name='{}', email_address='{}' WHERE uid='{}'".format(req_body["name"], req_body["email_address"] ,req_body["uid"]))
@@ -378,7 +418,7 @@ def user_update():
     user = userDTO(u[0])
 
     res = {}
-    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_STATUS_KEY] = status.HTTP_201_CREATED
     res[RES_DATA_KEY] = user.to_json()
     return jsonify(res)
 
