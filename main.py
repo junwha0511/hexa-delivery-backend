@@ -27,13 +27,11 @@ def my_page_list():
     req = request.args.to_dict()
 
     # 필수 parameter 확인: uid 
-    if "uid" not in req:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist required parameter: uid"
-        return jsonify(res)
-
-    # DB 연결
+    verify_result = verify_parameters(["uid"], req.keys())
+    if verify_result != None:
+        return verify_result
+    
+    # DB 연결   
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
@@ -59,12 +57,10 @@ def login_send_auth_number():
     req = request.form
 
     # 필수 parameter 확인: email_address 
-    if "email_address" not in req:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist required parameter: email_address"
-        return jsonify(res)
-
+    verify_result = verify_parameters(["email_address"], req.keys())
+    if verify_result != None:
+        return verify_result
+    
     # email validation 실시. 이메일 형식을 따르며, 반드시 unist.ac.kr 이메일 이어야 함.
     email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@.*')
     if not email_validation.match(req['email_address']):
@@ -118,12 +114,9 @@ def verify_auth_number():
 
     # 필수 parameter 확인: uid, email_address, auth_number
     auth_required_parameter = ("uid", "auth_number")
-    for param in auth_required_parameter:
-        if not json_has_key(req, param):
-            res = {}
-            res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-            res[RES_ERROR_MESSAGE] = "not exist required parameter: " + param
-            return jsonify(res)
+    verify_result = verify_parameters(auth_required_parameter, req.keys())
+    if verify_result != None:
+        return verify_result
 
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
@@ -179,18 +172,14 @@ def user_info():
     req_header = request.headers
     req_body = request.args.to_dict()
 
-    # 필수 parameter 확인
-    if 'access_token' not in req_header:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist header: access_token"
-        return jsonify(res)
-    if 'uid' not in req_body:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist required parameter: uid"
-        return jsonify(res)
-
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters(["access_token"], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["uid"], req_body.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -228,20 +217,14 @@ def user_update():
     req_header = request.headers
     req_body = request.form
 
-    # 필수 parameter 확인
-    if 'jwt_token' not in request.req_header:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist header: jwt_token"
-        return jsonify(res)
-    
+    # 필수 parameter/headaer 확인
+    header_verify_result = verify_parameters(["access_token"], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
     user_update_required_parameters = ("uid", "name", "email_address")
-    for param in user_update_required_parameters:
-        if not json_has_key(req, param):
-            res = {}
-            res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-            res[RES_ERROR_MESSAGE] = "not exist required parameter: " + param
-            return jsonify(res)
+    param_verify_result = verify_parameters(user_update_required_parameters, req_body.keys())
+    if param_verify_result != None:
+        return param_verify_result
     
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
@@ -290,17 +273,18 @@ def board_list():
     req = request.args.to_dict()
 
     # 필수 parameter 확인
-    if "category" not in req:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist required parameter: category"
-        return jsonify(res)
+    param_verify_result = verify_parameters(["category"], req.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
     if not req["category"] in ORDER_CATEGORY:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
         res[RES_ERROR_MESSAGE] = "User sended a category which doesn't exist: " + req["category"]
         return jsonify(res)
 
+    
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -328,13 +312,10 @@ def order_create():
     req = request.form
 
     # 필수 parameter 확인
-    for param in ORDERDAO_REQUIRED_PARAMETERS:
-        if not json_has_key(req, param):
-            res = {}
-            res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-            res[RES_ERROR_MESSAGE] = "not exist required parameter: " + param
-            return jsonify(res)
-
+    param_verify_result = verify_parameters(ORDERDAO_REQUIRED_PARAMETERS, req.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -365,11 +346,9 @@ def order_detail():
     req = request.args.to_dict()
 
     # 필수 parameter 확인
-    if "oid" not in req:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "not exist required parameter: oid"
-        return jsonify(res)
+    param_verify_result = verify_parameters("oid", req.keys())
+    if param_verify_result != None:
+        return param_verify_result
 
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
