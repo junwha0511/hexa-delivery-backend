@@ -22,27 +22,34 @@ init_db()
 '''
 
 # 마이 페이지 - 주문 리스트
-@app.route("/mypage/list", methods=['GET'])
+@app.route("/user/list", methods=['GET'])
 def my_page_list():
-    req = request.args.to_dict()
-
-    # 필수 parameter 확인: uid 
-    verify_result = verify_parameters(["uid"], req.keys())
-    if verify_result != None:
-        return verify_result
+    req_param = request.args.to_dict()
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["uid"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
     
     # DB 연결   
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
     # uid와 연결된 oid 기반으로 order SELECT
-    # todo: implement this part.
-
-    connect.commit()
-
+    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
+    
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
-    order_list = [OrderBreifDTO(*tuple).to_json() for tuple in order_list]
+    order_list = [OrderBreifDTO(*o).to_json() for o in order_list]
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
@@ -183,7 +190,7 @@ def user_info():
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
-    # jwt 토큰 유효성 확인
+    # Authentication
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_body["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
