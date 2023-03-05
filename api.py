@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import re
 import bcrypt
 import jwt
-import dotenv
 from dotenv import dotenv_values
 
 DATABASE = "test.db"
@@ -18,13 +17,14 @@ cursor = connect.cursor()
 
 server_secure_config = dotenv_values(".env") 
 
+
 # User info 테이블 생성
 cursor.execute("CREATE TABLE IF NOT EXISTS user \
-    (uid integer PRIMARY KEY, name text, email_address, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    (uid integer PRIMARY KEY, name text, email_address text, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
 # User auth 테이블 생성 (uid 근원)
 cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-    (uid integer PRIMARY KEY, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
+    (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
         FOREIGN KEY(uid) REFERENCES user(uid))")
 
 # restaurant info 테이블 생성
@@ -49,10 +49,9 @@ RES_STATUS_KEY = "status"
 RES_DATA_KEY = "data"
 RES_ERROR_MESSAGE = "error_message"
 
-SECURE_CONFIG_JWT_FIELD = "jwt_secret_key"
-SECURE_CONFIG_ENCRYPTED_FIELD = "encrypted_key"
-JWT_SECRET_KEY = server_secure_config[SECURE_CONFIG_JWT_FIELD]
-ENCRYPTED_KEY = server_secure_config[SECURE_CONFIG_ENCRYPTED_FIELD]
+JWT_SECRET_KEY = server_secure_config["JWT_SECRET_KEY"]
+ENCRYPTED_KEY = server_secure_config["ENCRYPTED_KEY"]
+GMAIL_APP_KEY = server_secure_config["GMAIL_APP_KEY"]
 
 class OrderDAO():
     def __init__(self, oid, exp_time, meeting_place, group_link, rid, member_num, uid):
@@ -213,20 +212,20 @@ def login_send_auth_number():
         return jsonify(res)
 
     # email validation 실시. 이메일 형식을 따르며, 반드시 unist.ac.kr 이메일 이어야 함.
-    email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@unist.ac.kr')
+    email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@.*')
     if not email_validation.match(req['email_address']):
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: 'email validation error'}, status.HTTP_400_BAD_REQUEST
 
     # 인증번호 생성 및 email 발송
-    smtp = smtplib.SMTP('smtp.naver.com', 587)
+    smtp = smtplib.SMTP('smtp.gmail.com', 587)
     smtp.ehlo()
     smtp.starttls()
-    smtp.login('hexa_delivery@naver.com', 'HeXA.pro*')
+    smtp.login('hexa.delivery@gmail.com', GMAIL_APP_KEY)
 
     auth_number = randrange(10000)
-    msg = MIMEText('{}'.format(auth_number))
-    msg['From'] = 'hexa_delivery@naver.com'
-    msg['Subject'] = '테스트'
+    msg = MIMEText('인증번호: {}\n\n앱으로 돌아가 인증번호를 입력해주세요!'.format(auth_number))
+    msg['From'] = 'hexa.delivery@gmail.com'
+    msg['Subject'] = 'HeXA Delivery: 인증번호 확인'
     msg['To'] = req['email_address']
     smtp.sendmail('hexa_delivery@naver.com', '{}'.format(req['email_address']), msg.as_string())
     smtp.quit()
@@ -240,7 +239,7 @@ def login_send_auth_number():
 
     # 이미 존재하는 유저인지 확인 (email_address 기반으로)
     req_email_address = req["email_address"]
-    cursor.execute('SELECT uid, email_address FROM user WHERE email_address = "{}"'.format(req_email_address))
+    cursor.execute('SELECT uid, email_address FROM user_auth WHERE email_address="{}"'.format(req_email_address))
     user = cursor.fetchall()
     uid = -1
 
@@ -248,7 +247,7 @@ def login_send_auth_number():
     if(len(user) == 0):
         cursor.execute("SELECT * FROM user")
         uid = len(cursor.fetchall()) + 1
-        cursor.execute("INSERT INTO user_auth(uid, exp_time, auth_number, verified) VALUES(?, ?, ?, ?)", (uid, exp_time, auth_number, 'FALSE'))
+        cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE'))
     else: # 기존 유저일 경우 기존 uid 선택 후 DB update
         uid = user[0][0]  
         cursor.execute("UPDATE user_auth SET exp_time='{}', auth_number='{}', verified='{}' WHERE uid='{}'".format(exp_time, auth_number, 'FALSE', uid))
@@ -540,3 +539,6 @@ def order_detail():
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order.to_json()
     return jsonify(res)
+
+if __name__ == "__main__":
+    app.run()
