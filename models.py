@@ -68,11 +68,10 @@ class OrderDetailDTO():
         return res
 
 class userDTO():
-    def __init__(self, uid, name, email_address, auth_time):
+    def __init__(self, uid, name, email_address):
         self.uid = uid
         self.name = name
         self.email_address = email_address
-        self.auth_time = auth_time
     def to_json(self):
         res = {}
         res["uid"] = self.uid

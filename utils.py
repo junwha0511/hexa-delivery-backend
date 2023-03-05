@@ -4,6 +4,7 @@ from flask_api import status
 from flask import Flask, jsonify, request 
 import bcrypt
 import jwt
+from datetime import datetime, timedelta
 
 connect = sqlite3.connect(DATABASE, isolation_level=None)
 
@@ -12,11 +13,11 @@ def init_db():
 
     # User info 테이블 생성
     cursor.execute("CREATE TABLE IF NOT EXISTS user \
-        (uid integer PRIMARY KEY, name text, email_address text, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
+        (uid integer PRIMARY KEY, name text, email_address text)")
 
     # User auth 테이블 생성 (uid 근원)
     cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
+        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, auth_time DATETIME, verified text, \
             FOREIGN KEY(uid) REFERENCES user(uid))")
 
     # restaurant info 테이블 생성
@@ -60,7 +61,7 @@ def verify_jwt_token(token, uid, auth_number):
     # Extract Password from JWT Token
     password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"]
     result = bcrypt.checkpw((str(uid)+str(auth_number)).encode("utf-8"), password.encode("utf-8"))
-
+    
     if result:
         return True
     
@@ -85,16 +86,20 @@ def verify_access_token_with_user(cursor, token, uid):
         return uid_check_result
     
     # Assert that auth_number must have the row for uid
-    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(uid))
+    cursor.execute("SELECT auth_number, auth_time FROM user_auth WHERE uid='{}'".format(uid))
     is_verified = False
-    try:
-        auth_number = cursor.fetchone()[0]
-        is_verified = verify_jwt_token(token, uid, auth_number)
-    except:
-        is_verified = False
+    # try:
+    auth_number, auth_time = cursor.fetchone()
+    auth_time = datetime.strptime(auth_time, DATETIME_FORMAT_STRING)
+    # Check if the token has been expired
+    if (datetime.now() - auth_time) > timedelta(days=TOKEN_EXP_CYCLE):
+        return {RES_STATUS_KEY: status.HTTP_410_GONE, RES_ERROR_MESSAGE: "access token expired"}, status.HTTP_410_GONE
+    is_verified = verify_jwt_token(token, uid, auth_number)
+    # except:
+    #     is_verified = False
         
     if not is_verified:
-        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
+        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized access token"}, status.HTTP_401_UNAUTHORIZED
     
     return None
 

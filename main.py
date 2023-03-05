@@ -16,80 +16,6 @@ app = Flask(__name__)
 
 init_db()
 
-# 메인 페이지
-'''
-상위 3개 LIMIT으로 일부 정보만 SELECT
-'''
-
-# 마이 페이지 - 유저 이름
-@app.route("/mypage/username", methods=['GET'])
-def mypage_name():
-    req_param = request.args.to_dict()
-    req_header = request.headers
-    
-    # 필수 parameter/header 확인
-    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
-    if header_verify_result != None:
-        return header_verify_result
-    param_verify_result = verify_parameters(["uid"], req_param.keys())
-    if param_verify_result != None:
-        return param_verify_result
-    
-    # DB 연결   
-    connect = sqlite3.connect(DATABASE, isolation_level=None)
-    cursor = connect.cursor()
-
-    # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
-    if verify_jwt_result != None:
-        return verify_jwt_result
-    
-    cursor.execute("SELECT name FROM user WHERE uid='{}'".format(req_param["uid"]))
-    
-    user_name = cursor.fetchone()[0]
-    
-    res = {}
-    res[RES_STATUS_KEY] = status.HTTP_200_OK
-    res[RES_DATA_KEY] = user_name
-
-    return jsonify(res), status.HTTP_200_OK
-    
-# 마이 페이지 - 주문 리스트
-@app.route("/mypage/list", methods=['GET'])
-def my_page_list():
-    req_param = request.args.to_dict()
-    req_header = request.headers
-    
-    # 필수 parameter/header 확인
-    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
-    if header_verify_result != None:
-        return header_verify_result
-    param_verify_result = verify_parameters(["uid"], req_param.keys())
-    if param_verify_result != None:
-        return param_verify_result
-    
-    # DB 연결   
-    connect = sqlite3.connect(DATABASE, isolation_level=None)
-    cursor = connect.cursor()
-
-    # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
-    if verify_jwt_result != None:
-        return verify_jwt_result
-    
-    # uid와 연결된 oid 기반으로 order SELECT
-    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
-    
-    # OrderBreifDTO 인스턴스 리스트 생성
-    order_list = cursor.fetchall()
-    order_list = [OrderBreifDTO(*o).to_json() for o in order_list]
-
-    res = {}
-    res[RES_STATUS_KEY] = status.HTTP_200_OK
-    res[RES_DATA_KEY] = order_list
-
-    return jsonify(res), status.HTTP_200_OK
-
 # 로그인 - 인증번호 전송
 @app.route("/login/send_auth_number", methods=['POST'])
 def login_send_auth_number():
@@ -189,11 +115,10 @@ def verify_auth_number():
     u = cursor.fetchall()
 
     # 새로운 유저
-    if(len(u)==0): 
-        cursor.execute("INSERT INTO user(uid, auth_time) VALUES(?, ?)", (uid, datetime.now() + timedelta(days=90)))
-    else: # 이미 존재하는 유저
-        cursor.execute('UPDATE user SET auth_time="{}" WHERE uid="{}"'.format(datetime.now() + timedelta(days=90), uid))
-
+    if(len(u)==0):
+        cursor.execute("INSERT INTO user(uid) VALUES (?)", (uid,))
+    cursor.execute('UPDATE user_auth SET auth_time="{}" WHERE uid="{}"'.format(datetime.now().strftime(DATETIME_FORMAT_STRING), uid))
+    
     connect.commit()
 
     # password를 포함하여 JWT token 발행
@@ -206,6 +131,41 @@ def verify_auth_number():
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
     res[RES_DATA_KEY] = {"uid": uid, HEADER_ACCESS_TOKEN: jwt_token}
     return jsonify(res), status.HTTP_201_CREATED
+
+# 자동로그인 확인
+
+'''
+- jwt token을 헤더로 받음
+- jwt token이 오늘 유효한지 확인 (오늘 내 만료일 경우 갱신 필요하다는 문구 GONE)
+- 모두 유효할 경우 200 OK  
+'''
+@app.route("/login/login", methods=['GET'])
+def login():
+    req_param = request.args.to_dict()
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["uid"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    # DB 연결   
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
+
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_DATA_KEY] = "ok"
+
+    return res, status.HTTP_200_OK
 
 # 유저 정보 확인
 # null인지 확인해서 수정 요청 status 412
@@ -281,16 +241,43 @@ def user_update():
     res[RES_DATA_KEY] = user.to_json()
     return jsonify(res)
 
+# 유저 - 주문 리스트
+@app.route("/user/list", methods=['GET'])
+def my_page_list():
+    req_param = request.args.to_dict()
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["uid"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    # DB 연결   
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
+
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
+    # uid와 연결된 oid 기반으로 order SELECT
+    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
+    
+    # OrderBreifDTO 인스턴스 리스트 생성
+    order_list = cursor.fetchall()
+    order_list = [OrderBreifDTO(*o).to_json() for o in order_list]
+
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_DATA_KEY] = order_list
+
+    return jsonify(res), status.HTTP_200_OK
 
 
-# 자동로그인 확인
-'''
-TODO(KOO-DH): 
-    - jwt token을 헤더로 받음
-    https://stackoverflow.com/questions/33265812/best-http-authorization-header-type-for-jwt
-    - jwt token이 오늘 유효한지 확인 (오늘 내 만료일 경우 갱신 필요하다는 문구 FORBIDDEN)
-    - 모두 유효할 경우 200 OK  
-'''
 
 # 게시판 페이지
 @app.route("/board/list", methods=['GET'])
@@ -395,6 +382,9 @@ def order_detail():
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order.to_json()
     return jsonify(res), status.HTTP_200_OK
-
+# 메인 페이지
+'''
+상위 3개 LIMIT으로 일부 정보만 SELECT
+'''
 if __name__ == "__main__":
     app.run()

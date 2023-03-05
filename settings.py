@@ -18,3 +18,6 @@ HEADER_ACCESS_TOKEN = "Access-Token"
 JWT_SECRET_KEY = server_secure_config["JWT_SECRET_KEY"]
 # BCRYPT_SALT = server_secure_config["BCRYPT_SALT"] # bcrypt.gensalt()
 GMAIL_APP_KEY = server_secure_config["GMAIL_APP_KEY"]
+
+DATETIME_FORMAT_STRING = '%m/%d/%Y'
+TOKEN_EXP_CYCLE = 90
