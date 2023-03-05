@@ -2,6 +2,8 @@ from settings import *
 import sqlite3
 from flask_api import status
 from flask import Flask, jsonify, request 
+import bcrypt
+import jwt
 
 connect = sqlite3.connect(DATABASE, isolation_level=None)
 
@@ -14,7 +16,7 @@ def init_db():
 
     # User auth 테이블 생성 (uid 근원)
     cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
+        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, password text, verified text, \
             FOREIGN KEY(uid) REFERENCES user(uid))")
 
     # restaurant info 테이블 생성
@@ -41,20 +43,6 @@ def json_has_key(json, key):
 
     return True
 
-def verify_jwt_token(token, uid, auth_number):
-    # Extract Password from JWT Token
-    password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"].encode("utf-8")
-
-    # Hash UID and Auth number again (bcrypt)
-    # hash_uid_authnum = bcrypt.hashpw((uid + auth_number).encode("utf-8"), ENCRYPTED_KEY).decode("utf-8")
-
-    # Compare two strings and return the result
-    checkPw = bcrypt.checkpw(password, (uid+auth_number).encode("utf-8"))
-    if(checkPw):
-        return True
-    
-    return False
-
 # Verify parameters and return 400 and error message if some parameters were missing
 def verify_parameters(req_params, actual_params, is_header=False):
     req_params = set(req_params)
@@ -67,3 +55,45 @@ def verify_parameters(req_params, actual_params, is_header=False):
         return jsonify(res), status.HTTP_400_BAD_REQUEST
     
     return None
+
+def verify_jwt_token(token, password_from_db):
+    # Extract Password from JWT Token
+    password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"]
+    
+    if password_from_db == password:
+        return True
+    
+    return False
+
+def check_uid_exists(cursor, uid):
+    # 유저 정보 SELECT
+    cursor.execute("SELECT uid, name, email_address FROM user WHERE uid='{}'".format(uid))
+
+    u = cursor.fetchall()
+
+    # 존재하지 않는 uid
+    if(len(u) == 0):
+        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "uid not exists"}, status.HTTP_404_NOT_FOUND
+    
+    return None
+
+# jwt 토큰 유효성 확인
+def verify_access_token_with_user(cursor, token, uid):
+    uid_check_result = check_uid_exists(cursor, uid)
+    if uid_check_result != None:
+        return uid_check_result
+    
+    # Assert that auth_number must have the row for uid
+    cursor.execute("SELECT password FROM user_auth WHERE uid='{}'".format(uid))
+    is_verified = False
+    try:
+        password = cursor.fetchall()[0][0]
+        is_verified = verify_jwt_token(token, password)
+    except:
+        is_verified = False
+        
+    if not is_verified:
+        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
+    
+    return None
+

@@ -6,11 +6,11 @@ from email.mime.text import MIMEText
 from random import randrange
 from datetime import datetime, timedelta
 import re
-import bcrypt
-import jwt
 from settings import *
 from utils import *
 from models import *
+import bcrypt
+import jwt
 
 app = Flask(__name__)
 
@@ -71,8 +71,7 @@ def login_send_auth_number():
     smtp.ehlo()
     smtp.starttls()
     smtp.login('hexa.delivery@gmail.com', GMAIL_APP_KEY)
-
-    auth_number = randrange(10000)
+    auth_number = randrange(1000, 10000)
     msg = MIMEText('인증번호: {}\n\n앱으로 돌아가 인증번호를 입력해주세요!'.format(auth_number))
     msg['From'] = 'hexa.delivery@gmail.com'
     msg['Subject'] = 'HeXA Delivery: 인증번호 확인'
@@ -117,7 +116,7 @@ def verify_auth_number():
     verify_result = verify_parameters(auth_required_parameter, req.keys())
     if verify_result != None:
         return verify_result
-
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -128,20 +127,21 @@ def verify_auth_number():
 
     # 존재하지 않는 uid
     if len(user_auth_list) == 0:
-        return {RES_STATUS_KEY: status.HTTP_403_FORBIDDEN, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_403_FORBIDDEN
+        return {RES_STATUS_KEY: status.HTTP_403_FORBIDDEN, RES_ERROR_MESSAGE: "uid not exists"}, status.HTTP_403_FORBIDDEN
+    
     uid, auth_number, exp_time = user_auth_list[0]
 
     # 잘못된 인증번호
     if(auth_number != req["auth_number"]):
         return {RES_STATUS_KEY: status.HTTP_417_EXPECTATION_FAILED, RES_ERROR_MESSAGE: "wrong authentication number"}, status.HTTP_417_EXPECTATION_FAILED
-
+    
     # 인증시간이 만료됨
     if(datetime.strptime(exp_time, '%Y-%m-%d %H:%M:%S.%f') < datetime.now()):
         return {RES_STATUS_KEY: status.HTTP_410_GONE, RES_ERROR_MESSAGE: "expired authentication number."}, status.HTTP_410_GONE
-
-    # 이제 유저 인증이 성공했음을 확신할 수 있다.
-    # verified 업데이트
-    cursor.execute('UPDATE user_auth SET verified={} WHERE uid="{}"'.format("TRUE", uid))
+    
+    # 유저 정보로 password 생성 + 테이블 업데이트
+    encrypted_password = bcrypt.hashpw((str(uid) + str(auth_number)).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    cursor.execute("UPDATE user_auth SET verified='{}', password='{}' WHERE uid={}".format("TRUE", encrypted_password, uid))
 
     # DB에 유저 정보 저장
     cursor.execute('SELECT * FROM user WHERE uid={}'.format(uid))
@@ -155,15 +155,14 @@ def verify_auth_number():
 
     connect.commit()
 
-    # 유저 정보로 bcrypt -> hash 값 기반으로 JWT token 발행
-    encrypted_password = bcrypt.hashpw((str(uid) + str(auth_number)).encode("utf-8"), bcrypt.gensalt()).decode("utf-8") # str 객체, bytes로 인코드, salt를 이용하여 암호화
+    # password를 포함하여 JWT token 발행
     password_json = {
     "password": encrypted_password,
     }
     jwt_token = jwt.encode(password_json, JWT_SECRET_KEY, algorithm="HS256")
-
+    
     # RETURN UID, JWT
-    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, "access_token": jwt_token}}, status.HTTP_201_CREATED
+    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, HEADER_ACCESS_TOKEN: jwt_token}}, status.HTTP_201_CREATED
 
 # 유저 정보 확인
 # null인지 확인해서 수정 요청 status 412
@@ -173,37 +172,27 @@ def user_info():
     req_body = request.args.to_dict()
 
     # 필수 parameter/header 확인
-    header_verify_result = verify_parameters(["access_token"], req_header.keys(), is_header=True)
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
     param_verify_result = verify_parameters(["uid"], req_body.keys())
     if param_verify_result != None:
         return param_verify_result
-    
+        
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # jwt 토큰 유효성 확인
-    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(req_body["uid"]))
-    auth_num = cursor.fetchall()[0][0]
-    isVerifed = verify_jwt_token(req_header["access_token"], req_body["uid"], auth_num)
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_body["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
 
-    if (~isVerifed):
-        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
-
-    # 유저 정보 SELECT
-    cursor.execute("SELECT uid, name, email_address FROM user WHERE uid='{}'".format(req_body["uid"]))
-    connect.commit()
-
+    cursor.execute("SELECT * FROM user")
     u = cursor.fetchall()
-
-    # 존재하지 않는 uid
-    if(len(u) == 0):
-        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_404_NOT_FOUND
-
+    
     # userDTO 인스턴스 생성
-    user = userDTO(u[0])
+    user = userDTO(*u[0])
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
@@ -218,7 +207,7 @@ def user_update():
     req_body = request.form
 
     # 필수 parameter/headaer 확인
-    header_verify_result = verify_parameters(["access_token"], req_header.keys(), is_header=True)
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
     user_update_required_parameters = ("uid", "name", "email_address")
@@ -231,19 +220,10 @@ def user_update():
     cursor = connect.cursor()
 
     # jwt 토큰 유효성 확인
-    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(req_body["uid"]))
-    auth_num = cursor.fetchall()[0]
-    isVerifed = verify_jwt_token(req_header["jwt_token"], req_body["uid"], auth_num)
-
-    if (~isVerifed):
-        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "unauthorized jwt token"}, status.HTTP_401_UNAUTHORIZED
-
-    # 존재하지 않는 uid 케이스 처리
-    cursor.execute("SELECT * FROM user WHERE uid='{}'".format(req_body["uid"]))
-    uid_check = cursor.fetchall()
-    if(len(uid_check) == 0):
-        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "not exist uid"}, status.HTTP_404_NOT_FOUND
-
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_body["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
     # 유저 정보 UPDATE
     cursor.execute("UPDATE user SET name='{}', email_address='{}' WHERE uid='{}'".format(req_body["name"], req_body["email_address"] ,req_body["uid"]))
     connect.commit()
@@ -283,8 +263,6 @@ def board_list():
         res[RES_ERROR_MESSAGE] = "User sended a category which doesn't exist: " + req["category"]
         return jsonify(res)
 
-    
-    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
