@@ -88,7 +88,7 @@ def verify_access_token_with_user(cursor, token, uid):
     cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(uid))
     is_verified = False
     try:
-        auth_number = cursor.fetchall()[0][0]
+        auth_number = cursor.fetchone()[0]
         is_verified = verify_jwt_token(token, uid, auth_number)
     except:
         is_verified = False

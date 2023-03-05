@@ -21,8 +21,41 @@ init_db()
 상위 3개 LIMIT으로 일부 정보만 SELECT
 '''
 
+# 마이 페이지 - 유저 이름
+@app.route("/mypage/username", methods=['GET'])
+def mypage_name():
+    req_param = request.args.to_dict()
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["uid"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    # DB 연결   
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
+
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
+    cursor.execute("SELECT name FROM user WHERE uid='{}'".format(req_param["uid"]))
+    
+    user_name = cursor.fetchone()[0]
+    
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_DATA_KEY] = user_name
+
+    return jsonify(res), status.HTTP_200_OK
+    
 # 마이 페이지 - 주문 리스트
-@app.route("/user/list", methods=['GET'])
+@app.route("/mypage/list", methods=['GET'])
 def my_page_list():
     req_param = request.args.to_dict()
     req_header = request.headers
@@ -55,8 +88,7 @@ def my_page_list():
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order_list
 
-    return jsonify(res)
-
+    return jsonify(res), status.HTTP_200_OK
 
 # 로그인 - 인증번호 전송
 @app.route("/login/send_auth_number", methods=['POST'])
@@ -110,8 +142,10 @@ def login_send_auth_number():
     
     connect.commit()
     
-    # RETURN UID, EXP_TIME
-    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, "exp_time": exp_time}}, status.HTTP_201_CREATED
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_201_CREATED
+    res[RES_DATA_KEY] = {"uid": uid, "exp_time": exp_time}
+    return jsonify(res), status.HTTP_201_CREATED
 
 # 로그인 - 인증번호 확인
 @app.route("/login/verify_auth_number", methods=['POST'])
@@ -168,8 +202,10 @@ def verify_auth_number():
     }
     jwt_token = jwt.encode(password_json, JWT_SECRET_KEY, algorithm="HS256")
     
-    # RETURN UID, JWT
-    return {RES_STATUS_KEY: status.HTTP_201_CREATED, RES_DATA_KEY: {"uid": uid, HEADER_ACCESS_TOKEN: jwt_token}}, status.HTTP_201_CREATED
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_201_CREATED
+    res[RES_DATA_KEY] = {"uid": uid, HEADER_ACCESS_TOKEN: jwt_token}
+    return jsonify(res), status.HTTP_201_CREATED
 
 # 유저 정보 확인
 # null인지 확인해서 수정 요청 status 412
@@ -245,6 +281,8 @@ def user_update():
     res[RES_DATA_KEY] = user.to_json()
     return jsonify(res)
 
+
+
 # 자동로그인 확인
 '''
 TODO(KOO-DH): 
@@ -288,7 +326,7 @@ def board_list():
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order_list
 
-    return jsonify(res)
+    return jsonify(res), status.HTTP_200_OK
 
 
 # 모임 생성 페이지
@@ -322,7 +360,7 @@ def order_create():
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
     res[RES_DATA_KEY] = new_order.to_json()
-    return jsonify(res)
+    return jsonify(res), status.HTTP_201_CREATED
 
 
 # 모임 상세 페이지
@@ -356,7 +394,7 @@ def order_detail():
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order.to_json()
-    return jsonify(res)
+    return jsonify(res), status.HTTP_200_OK
 
 if __name__ == "__main__":
     app.run()
