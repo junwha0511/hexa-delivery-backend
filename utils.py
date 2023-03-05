@@ -22,18 +22,13 @@ def init_db():
 
     # restaurant info 테이블 생성
     cursor.execute("CREATE TABLE IF NOT EXISTS restaurant \
-        (rid integer PRIMARY KEY, name text NOT NULL, location text NOT NULL, category text NOT NULL, fee integer NOT NULL, menu_link text)")
+        (rid integer PRIMARY KEY, name text NOT NULL, category text NOT NULL, menu_link text)")
 
     # Order info 테이블 생성
     cursor.execute("CREATE TABLE IF NOT EXISTS order_info \
-        (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, meeting_place text NOT NULL, group_link text NOT NULL, rid integer, member_num integer NOT NULL, uid integer, \
+        (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, fee integer NOT NULL, location text NOT NULL, group_link text NOT NULL, rid integer, member_num integer NOT NULL, uid integer, \
             FOREIGN KEY (rid) REFERENCES restaurant(rid), FOREIGN KEY (uid) REFERENCES user(uid) )")
 
-    # User - Order테이블 생성
-    cursor.execute("CREATE TABLE IF NOT EXISTS user_order_relationship \
-        (uid integer, oid integer, PRIMARY KEY (uid, oid), \
-            FOREIGN KEY (uid) REFERENCES restaurant(uid), FOREIGN KEY (oid) REFERENCES restaurant(oid) )")
-    
     
 # json에 key가 존재하는지 확인
 def json_has_key(json, key):

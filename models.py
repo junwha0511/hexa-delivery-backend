@@ -19,8 +19,24 @@ class OrderDAO():
         res["uid"] = self.uid
         return res
 
-# order 간략 정보 DTO (게시판 전용)
-class OrderBreifDTO():
+# order 간략 정보 DTO (메인 페이지)
+class OrderBriefDTO():
+    def __init__(self, oid, name, exp_time):
+        self.oid = oid
+        self.name = name
+        self.exp_time = exp_time
+
+    def to_json(self):
+        res = {}
+        res["oid"] = self.oid
+        res["name"] = self.name
+        res["exp_time"] = self.exp_time
+
+        return res
+
+
+# order 프리뷰 정보 DTO (게시판 전용)
+class OrderPreviewDTO():
     def __init__(self, oid, name, category, exp_time, member_num, fee):
         self.oid = oid
         self.name = name

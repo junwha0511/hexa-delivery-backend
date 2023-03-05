@@ -59,7 +59,7 @@ def login_send_auth_number():
 
     # 새로운 유저일 경우 새 uid 생성 후 DB에 insert
     if(len(user) == 0):
-        cursor.execute("SELECT * FROM user")
+        cursor.execute("SELECT uid FROM user")
         uid = len(cursor.fetchall()) + 1
         cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE'))
     else: # 기존 유저일 경우 기존 uid 선택 후 DB update
@@ -269,7 +269,7 @@ def my_page_list():
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
-    order_list = [OrderBreifDTO(*o).to_json() for o in order_list]
+    order_list = [OrderPreviewDTO(*o).to_json() for o in order_list]
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
@@ -277,37 +277,55 @@ def my_page_list():
 
     return jsonify(res), status.HTTP_200_OK
 
+'''
+TODO(junwha): 테스트용 모임 dummy data 생성 스크립트 필요
+TODO(junwha): 모임 마감 기준을 exp_time으로 잡고, 결과 필터링시 datetime.now()보다 앞선 것들만 조회
+'''
+# 메인 페이지
+'''
+상위 3개 LIMIT으로 일부 정보만 SELECT
+'''
+# 게시판 페이지
+@app.route("/board/top_list", methods=['GET'])
+def top_list():    
+    # DB 연결
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
 
+    # order 3개 select
+    cursor.execute("SELECT oid, name, exp_time FROM order_info ORDER BY exp_time LIMIT 3")
+    
+    # OrderBreifDTO 인스턴스 리스트 생성
+    order_list = cursor.fetchall()
+    order_list = [OrderBriefDTO(*o).to_json() for o in order_list]
+
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_DATA_KEY] = order_list
+
+    return jsonify(res), status.HTTP_200_OK
 
 # 게시판 페이지
 @app.route("/board/list", methods=['GET'])
 def board_list():
-    req = request.args.to_dict()
+    req_param = request.args.to_dict()
 
     # 필수 parameter 확인
-    param_verify_result = verify_parameters(["category"], req.keys())
+    param_verify_result = verify_parameters(["category"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
     
-    if not req["category"] in ORDER_CATEGORY:
-        res = {}
-        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
-        res[RES_ERROR_MESSAGE] = "User sended a category which doesn't exist: " + req["category"]
-        return jsonify(res)
-
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
-    cursor.execute("SELECT o.oid, r.name, r.category, o.exp_time, o.member_num, r.fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-                   WHERE r.category='{}' LIMIT 10".format(req_category["category"]))
-
-    connect.commit()
+    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
+                   WHERE r.category='{}' ORDER BY exp_time LIMIT 10".format(req_param["category"]))
 
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
-    order_list = [OrderBreifDTO(*tuple).to_json() for tuple in order_list]
+    order_list = [OrderPreviewDTO(*o).to_json() for o in order_list]
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
@@ -319,29 +337,35 @@ def board_list():
 # 모임 생성 페이지
 @app.route("/order/create", methods=['POST'])
 def order_create():
-    req = request.form
-
-    # 필수 parameter 확인
-    param_verify_result = verify_parameters(ORDERDAO_REQUIRED_PARAMETERS, req.keys())
+    req_param = request.form
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(ORDER_DAO_REQUIRED_PARAMETERS, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
     
-    # DB 연결
+    # DB 연결   
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
     # OrderDAO 인스턴스 생성
-    cursor.execute("SELECT * FROM order_info")
+    cursor.execute("SELECT oid FROM order_info")
     oid = len(cursor.fetchall()) + 1
-    param_data = [req[param_name] for param_name in ORDERDAO_REQUIRED_PARAMETERS]
+    param_data = [req_param[param_name] for param_name in ORDER_DAO_REQUIRED_PARAMETERS]
     new_order = OrderDAO(oid, *param_data)
     
     # INSERT to order_info 테이블
-    cursor.execute("INSERT INTO order_info(oid, exp_time, meeting_place, group_link, rid, member_num, uid) VALUES(?,?,?,?,?,?,?)",
-                   (new_order.oid, new_order.exp_time, new_order.meeting_place, new_order.group_link, new_order.rid, new_order.member_num, new_order.uid))
-    # INSERT to user_order_relationship 테이블               
-    cursor.execute("INSERT INTO user_order_relationship(uid, oid) VALUES(?, ?)", (new_order.uid, new_order.oid))
-    
+    cursor.execute("INSERT INTO order_info({}) VALUES({}})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))),
+                   *new_order)
     connect.commit()
 
     res = {}
@@ -365,7 +389,7 @@ def order_detail():
     cursor = connect.cursor()
 
     # DB에서 oid 기반으로 order 정보 select
-    cursor.execute("SELECT o.oid, r.name, o.exp_time, r.location, o.member_num, r.category, r.fee, r.menu_link, o.group_link \
+    cursor.execute("SELECT oid, name, exp_time, location, member_num, category, fee, menu_link, group_link \
                     FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}' LIMIT 10".format(req["oid"]))
     connect.commit()
 
@@ -376,15 +400,22 @@ def order_detail():
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "not exist oid"}, status.HTTP_400_BAD_REQUEST
 
     # OrderDetailDTO 인스턴스 생성
-    order = OrderDetailDTO(o[0])
-
+    order = OrderDetailDTO(*o[0])
+    
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order.to_json()
     return jsonify(res), status.HTTP_200_OK
-# 메인 페이지
+
 '''
-상위 3개 LIMIT으로 일부 정보만 SELECT
+모임 마감
 '''
+
+
+'''
+가게 검색
+'''
+
+
 if __name__ == "__main__":
     app.run()
