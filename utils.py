@@ -16,7 +16,7 @@ def init_db():
 
     # User auth 테이블 생성 (uid 근원)
     cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, password text, verified text, \
+        (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
             FOREIGN KEY(uid) REFERENCES user(uid))")
 
     # restaurant info 테이블 생성
@@ -56,11 +56,12 @@ def verify_parameters(req_params, actual_params, is_header=False):
     
     return None
 
-def verify_jwt_token(token, password_from_db):
+def verify_jwt_token(token, uid, auth_number):
     # Extract Password from JWT Token
     password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"]
-    
-    if password_from_db == password:
+    result = bcrypt.checkpw((str(uid)+str(auth_number)).encode("utf-8"), password.encode("utf-8"))
+
+    if result:
         return True
     
     return False
@@ -84,11 +85,11 @@ def verify_access_token_with_user(cursor, token, uid):
         return uid_check_result
     
     # Assert that auth_number must have the row for uid
-    cursor.execute("SELECT password FROM user_auth WHERE uid='{}'".format(uid))
+    cursor.execute("SELECT auth_number FROM user_auth WHERE uid='{}'".format(uid))
     is_verified = False
     try:
-        password = cursor.fetchall()[0][0]
-        is_verified = verify_jwt_token(token, password)
+        auth_number = cursor.fetchall()[0][0]
+        is_verified = verify_jwt_token(token, uid, auth_number)
     except:
         is_verified = False
         

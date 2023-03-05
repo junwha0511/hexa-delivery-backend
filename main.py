@@ -141,7 +141,7 @@ def verify_auth_number():
     
     # 유저 정보로 password 생성 + 테이블 업데이트
     encrypted_password = bcrypt.hashpw((str(uid) + str(auth_number)).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    cursor.execute("UPDATE user_auth SET verified='{}', password='{}' WHERE uid={}".format("TRUE", encrypted_password, uid))
+    cursor.execute("UPDATE user_auth SET verified='{}' WHERE uid={}".format("TRUE", uid))
 
     # DB에 유저 정보 저장
     cursor.execute('SELECT * FROM user WHERE uid={}'.format(uid))
