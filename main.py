@@ -416,6 +416,3 @@ def order_detail():
 가게 검색
 '''
 
-
-if __name__ == "__main__":
-    app.run()
