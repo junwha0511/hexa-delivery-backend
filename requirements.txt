@@ -9,3 +9,4 @@ zipp==3.11.0
 flask_api==3.0.post1
 bcrypt==4.0.1
 PyJWT==2.6.0
+python-dotenv==1.0.0
