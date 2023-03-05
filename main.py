@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request 
 from flask_api import status
 # from flask_jwt_extended import JWTManager
-import sqlite3
 import smtplib
 from email.mime.text import MIMEText
 from random import randrange
@@ -9,158 +8,13 @@ from datetime import datetime, timedelta
 import re
 import bcrypt
 import jwt
-from dotenv import dotenv_values
-
-DATABASE = "test.db"
-connect = sqlite3.connect(DATABASE, isolation_level=None)
-cursor = connect.cursor()
-
-server_secure_config = dotenv_values(".env") 
-
-
-# User info 테이블 생성
-cursor.execute("CREATE TABLE IF NOT EXISTS user \
-    (uid integer PRIMARY KEY, name text, email_address text, auth_time DATETIME DEFAULT CURRENT_TIMESTAMP)")
-
-# User auth 테이블 생성 (uid 근원)
-cursor.execute("CREATE TABLE IF NOT EXISTS user_auth \
-    (uid integer PRIMARY KEY, email_address text, exp_time DATETIME NOT NULL, auth_number text NOT NULL, verified text, \
-        FOREIGN KEY(uid) REFERENCES user(uid))")
-
-# restaurant info 테이블 생성
-cursor.execute("CREATE TABLE IF NOT EXISTS restaurant \
-    (rid integer PRIMARY KEY, name text NOT NULL, location text NOT NULL, category text NOT NULL, fee integer NOT NULL, menu_link text)")
-
-# Order info 테이블 생성
-cursor.execute("CREATE TABLE IF NOT EXISTS order_info \
-    (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, meeting_place text NOT NULL, group_link text NOT NULL, rid integer, member_num integer NOT NULL, uid integer, \
-        FOREIGN KEY (rid) REFERENCES restaurant(rid), FOREIGN KEY (uid) REFERENCES user(uid) )")
-
-# User - Order테이블 생성
-cursor.execute("CREATE TABLE IF NOT EXISTS user_order_relationship \
-    (uid integer, oid integer, PRIMARY KEY (uid, oid), \
-        FOREIGN KEY (uid) REFERENCES restaurant(uid), FOREIGN KEY (oid) REFERENCES restaurant(oid) )")
-
-
-ORDERDAO_REQUIRED_PARAMETERS = ("exp_time", "meeting_place", "group_link", "rid", "member_num", "uid")
-ORDER_CATEGORY = ('치킨', '피자', '양식', '한식', '중식', '일식', '분식', '야식', '간식')
-
-RES_STATUS_KEY = "status"
-RES_DATA_KEY = "data"
-RES_ERROR_MESSAGE = "error_message"
-
-JWT_SECRET_KEY = server_secure_config["JWT_SECRET_KEY"]
-ENCRYPTED_KEY = server_secure_config["ENCRYPTED_KEY"]
-GMAIL_APP_KEY = server_secure_config["GMAIL_APP_KEY"]
-
-class OrderDAO():
-    def __init__(self, oid, exp_time, meeting_place, group_link, rid, member_num, uid):
-        self.oid = oid
-        self.exp_time = exp_time
-        self.meeting_place = meeting_place
-        self.group_link = group_link
-        self.rid = rid
-        self.member_num = member_num
-        self.uid = uid
-
-    def to_json(self):
-        res = {}
-        res["oid"] = self.oid
-        res["exp_time"] = self.exp_time
-        res["meeting_place"] = self.meeting_place
-        res["group_link"] = self.group_link
-        res["rid"] = self.rid
-        res["member_num"] = self.member_num
-        res["uid"] = self.uid
-        return res
-
-# order 간략 정보 DTO (게시판 전용)
-class OrderBreifDTO():
-    def __init__(self, oid, name, category, exp_time, member_num, fee):
-        self.oid = oid
-        self.name = name
-        self.category = category
-        self.exp_time = exp_time
-        self.member_num = member_num
-        self.fee = fee    
-
-    def to_json(self):
-        res = {}
-        res["oid"] = self.oid
-        res["name"] = self.name
-        res["category"] = self.category
-        res["exp_time"] = self.exp_time
-        res["member_num"] = self.member_num      
-        res["fee"] = self.fee
-
-        return res
-
-# order 상세 정보 DTO
-class OrderDetailDTO():
-    def __init__(self, oid, name, exp_time, location, member_num, category, fee, menu_link, group_link):
-        self.oid = oid
-        self.name = name
-        self.exp_time = exp_time
-        self.location = location
-        self.member_num = member_num
-        self.category = category
-        self.fee = fee
-        self.menu_link = menu_link
-        self.group_link = group_link          
-
-    def to_json(self):
-        res = {}
-        res["oid"] = self.oid
-        res["name"] = self.name
-        res["exp_time"] = self.exp_time
-        res["location"] = self.location
-        res["member_num"] = self.member_num
-        res["category"] = self.category
-        res["fee"] = self.fee
-        res["menu_link"] = self.menu_link
-        res["group_link"] = self.group_link
-
-        return res
-
-class userDTO():
-    def __init__(self, uid, name, email_address):
-        self.uid = uid
-        self.name = name
-        self.email_address = email_address
-    
-    def to_json(self):
-        res = {}
-        res["uid"] = self.uid
-        res["name"] = self.name
-        res["email_address"] = self.email_address
-        
-        return res
-
-# json에 key가 존재하는지 확인
-def json_has_key(json, key):
-    try:
-        buf = json[key]
-    except KeyError:
-        return False
-
-    return True
-
-def verify_jwt_token(token, uid, auth_number):
-    # Extract Password from JWT Token
-    password = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")["password"].encode("utf-8")
-
-    # Hash UID and Auth number again (bcrypt)
-    # hash_uid_authnum = bcrypt.hashpw((uid + auth_number).encode("utf-8"), ENCRYPTED_KEY).decode("utf-8")
-
-    # Compare two strings and return the result
-    checkPw = bcrypt.checkpw(password, (uid+auth_number).encode("utf-8"))
-    if(checkPw):
-        return True
-    
-    return False
+from settings import *
+from utils import *
+from models import *
 
 app = Flask(__name__)
 
+init_db()
 
 # 메인 페이지
 '''
@@ -202,7 +56,7 @@ def my_page_list():
 # 로그인 - 인증번호 전송
 @app.route("/login/send_auth_number", methods=['POST'])
 def login_send_auth_number():
-    req = request.args.to_dict()
+    req = request.form
 
     # 필수 parameter 확인: email_address 
     if "email_address" not in req:
@@ -260,7 +114,7 @@ def login_send_auth_number():
 # 로그인 - 인증번호 확인
 @app.route("/login/verify_auth_number", methods=['POST'])
 def verify_auth_number():
-    req = request.args.to_dict()
+    req = request.form
 
     # 필수 parameter 확인: uid, email_address, auth_number
     auth_required_parameter = ("uid", "auth_number")
@@ -372,7 +226,7 @@ def user_info():
 @app.route("/user/update", methods=['POST'])
 def user_update():
     req_header = request.headers
-    req_body = request.args.to_dict()
+    req_body = request.form
 
     # 필수 parameter 확인
     if 'jwt_token' not in request.req_header:

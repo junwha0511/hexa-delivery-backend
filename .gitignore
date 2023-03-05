@@ -21,3 +21,5 @@ doc/api/
 *.js.map
 *.db
 .env
+
+__pycache__
