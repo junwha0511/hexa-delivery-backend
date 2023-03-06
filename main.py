@@ -362,8 +362,8 @@ def order_create():
     new_order = OrderDAO(oid, *param_data)
     
     # INSERT to order_info 테이블
-    cursor.execute("INSERT INTO order_info({}) VALUES({}})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))),
-                   *new_order)
+    cursor.execute("INSERT INTO order_info({}) VALUES({})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))),
+                   new_order)
     connect.commit()
 
     res = {}
@@ -449,12 +449,9 @@ def store_create():
     values = [rid if param=="rid" else req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
     
     result = True
-    try:
-        cursor.execute("INSERT INTO restaurant({}) VALUES({}})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(RESTAURANT_DAO_REQUIRED_PARAMETERS))), *values)
-    except Exception as e:
-        print(e)
-        result = False
-    
+    cursor.execute("INSERT INTO restaurant({}) VALUES({})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(RESTAURANT_DAO_REQUIRED_PARAMETERS))), values)
+    connect.commit()
+  
     res = {}
     if result:
         res[RES_STATUS_KEY] = status.HTTP_201_CREATED
