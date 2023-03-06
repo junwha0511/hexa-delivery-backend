@@ -342,7 +342,9 @@ def order_create():
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
-    param_verify_result = verify_parameters(ORDER_DAO_REQUIRED_PARAMETERS, req_param.keys())
+    required_params = list(ORDER_DAO_REQUIRED_PARAMETERS)
+    required_params.remove("oid")
+    param_verify_result = verify_parameters(required_params, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
     
@@ -350,7 +352,7 @@ def order_create():
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
-    # Authentication
+    # # Authentication
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
@@ -358,12 +360,12 @@ def order_create():
     # OrderDAO 인스턴스 생성
     cursor.execute("SELECT oid FROM order_info")
     oid = len(cursor.fetchall()) + 1
-    param_data = [req_param[param_name] for param_name in ORDER_DAO_REQUIRED_PARAMETERS]
-    new_order = OrderDAO(oid, *param_data)
+    param_data = [oid if param_name == "oid" else req_param[param_name] for param_name in ORDER_DAO_REQUIRED_PARAMETERS]
+    new_order = OrderDAO(*param_data)
     
     # INSERT to order_info 테이블
     cursor.execute("INSERT INTO order_info({}) VALUES({})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))),
-                   new_order)
+                   param_data)
     connect.commit()
 
     res = {}

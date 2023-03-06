@@ -1,8 +1,9 @@
 class OrderDAO():
-    def __init__(self, oid, exp_time, meeting_place, group_link, rid, member_num, uid):
+    def __init__(self, oid, exp_time, fee, location, group_link, rid, member_num, uid):
         self.oid = oid
         self.exp_time = exp_time
-        self.meeting_place = meeting_place
+        self.fee = fee
+        self.location = location
         self.group_link = group_link
         self.rid = rid
         self.member_num = member_num
@@ -12,7 +13,8 @@ class OrderDAO():
         res = {}
         res["oid"] = self.oid
         res["exp_time"] = self.exp_time
-        res["meeting_place"] = self.meeting_place
+        res["fee"] = self.fee
+        res["location"] = self.location
         res["group_link"] = self.group_link
         res["rid"] = self.rid
         res["member_num"] = self.member_num
