@@ -9,6 +9,6 @@ RUN pip3 install gevent gunicorn
 EXPOSE 7777
 
 WORKDIR /server
-ENTRYPOINT ["gunicorn", "main:app", "-b", "0.0.0.0:7777", "-w", "4", "--timeout=10", "-k", "gevent"]
+ENTRYPOINT ["gunicorn", "main:app", "--access-logfile", "access.log", "--error-logfile", "error.log", "-b", "0.0.0.0:7777", "-w", "4", "--timeout=10", "-k", "gevent"]
 
 
