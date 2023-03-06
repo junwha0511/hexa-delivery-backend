@@ -445,9 +445,8 @@ def store_create():
     if verify_jwt_result != None:
         return verify_jwt_result
     
-    req_param["rid"] = rid
     # INSERT to order_info 테이블
-    values = [req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
+    values = [rid if param=="rid" else req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
     
     result = True
     try:
