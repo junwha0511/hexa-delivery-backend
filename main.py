@@ -419,15 +419,17 @@ def order_detail():
 '''
 # 모임 생성 페이지
 @app.route("/store/create", methods=['POST'])
-def order_create():
+def store_create():
     req_param = request.form
     req_header = request.headers
-    
+        
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
-    param_verify_result = verify_parameters(RESTAURANT_DAO_REQUIRED_PARAMETERS, req_param.keys())
+    required_params = list(RESTAURANT_DAO_REQUIRED_PARAMETERS)
+    required_params.remove("rid")
+    param_verify_result = verify_parameters(required_params, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
     
@@ -435,17 +437,21 @@ def order_create():
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
+    cursor.execute("SELECT rid FROM restaurant")
+    rid = len(cursor.fetchall()) + 1
+    
     # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], 1) # Only first user can create store (ADMIN)
     if verify_jwt_result != None:
         return verify_jwt_result
     
+    req_param["rid"] = rid
     # INSERT to order_info 테이블
     values = [req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
     
     result = True
     try:
-        cursor.execute("INSERT INTO restaurant({}) VALUES({}})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))), *values)
+        cursor.execute("INSERT INTO restaurant({}) VALUES({}})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(RESTAURANT_DAO_REQUIRED_PARAMETERS))), *values)
     except Exception as e:
         print(e)
         result = False
