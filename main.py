@@ -286,7 +286,7 @@ TODO(junwha): 모임 마감 기준을 exp_time으로 잡고, 결과 필터링시
 상위 3개 LIMIT으로 일부 정보만 SELECT
 '''
 # 게시판 페이지
-@app.route("/board/top_list", methods=['GET'])
+@app.route("/order/top_list", methods=['GET'])
 def top_list():    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
@@ -306,7 +306,7 @@ def top_list():
     return jsonify(res), status.HTTP_200_OK
 
 # 게시판 페이지
-@app.route("/board/list", methods=['GET'])
+@app.route("/order/list", methods=['GET'])
 def board_list():
     req_param = request.args.to_dict()
 
