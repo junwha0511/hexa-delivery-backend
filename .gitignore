@@ -20,6 +20,7 @@ doc/api/
 *.js.deps
 *.js.map
 *.db
+*.log
 .env
 
 __pycache__
