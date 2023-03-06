@@ -291,7 +291,7 @@ def top_list():
     cursor = connect.cursor()
 
     # order 3개 select
-    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant ORDER BY exp_time LIMIT 3")
+    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant WHERE exp_time < '{}' ORDER BY exp_time LIMIT 3".format(datetime.now().isoformat()))
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
@@ -319,7 +319,7 @@ def board_list():
 
     # 카테고리에 속한 order 10개 select
     cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-                   WHERE r.category='{}' ORDER BY exp_time LIMIT 10".format(req_param["category"]))
+                   WHERE r.category='{}' AND o.exp_time<'{}' ORDER BY exp_time LIMIT 10".format(req_param["category"], datetime.now().isoformat()))
 
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
