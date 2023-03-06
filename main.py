@@ -389,7 +389,6 @@ def order_detail():
     # DB에서 oid 기반으로 order 정보 select
     cursor.execute("SELECT oid, name, exp_time, location, member_num, category, fee, menu_link, group_link \
                     FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}' LIMIT 10".format(req["oid"]))
-    connect.commit()
 
     o = cursor.fetchall()
 
@@ -414,3 +413,49 @@ def order_detail():
 가게 검색
 '''
 
+
+'''
+가게 추가
+'''
+# 모임 생성 페이지
+@app.route("/store/create", methods=['POST'])
+def order_create():
+    req_param = request.form
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(RESTAURANT_DAO_REQUIRED_PARAMETERS, req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    # DB 연결   
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
+
+    # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
+    # INSERT to order_info 테이블
+    values = [req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
+    
+    result = True
+    try:
+        cursor.execute("INSERT INTO restaurant({}) VALUES({}})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))), *values)
+    except Exception as e:
+        print(e)
+        result = False
+    
+    res = {}
+    if result:
+        res[RES_STATUS_KEY] = status.HTTP_201_CREATED
+        res[RES_DATA_KEY] = dict(zip(RESTAURANT_DAO_REQUIRED_PARAMETERS, values))
+    else:
+        res[RES_STATUS_KEY] = status.HTTP_406_NOT_ACCEPTABLE
+        res[RES_ERROR_MESSAGE] = "DB couldn't work now"
+
+    return jsonify(res), res[RES_STATUS_KEY]

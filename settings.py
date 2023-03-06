@@ -7,6 +7,7 @@ server_secure_config = dotenv_values(".env")
 DATABASE = "test.db"
 
 ORDER_DAO_REQUIRED_PARAMETERS = ("oid", "exp_time", "fee", "location", "group_link", "rid", "member_num", "uid")
+RESTAURANT_DAO_REQUIRED_PARAMETERS = ("rid", "name", "category", "menu_link")
 ORDER_CATEGORY = ('치킨', '피자', '양식', '한식', '중식', '일식', '분식', '야식', '간식')
 
 RES_STATUS_KEY = "status"
