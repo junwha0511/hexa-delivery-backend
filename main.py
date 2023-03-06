@@ -172,13 +172,13 @@ def login():
 @app.route("/user/info", methods=['GET'])
 def user_info():
     req_header = request.headers
-    req_body = request.args.to_dict()
+    req_param = request.args.to_dict()
 
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
-    param_verify_result = verify_parameters(["uid"], req_body.keys())
+    param_verify_result = verify_parameters(["uid"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
         
@@ -187,7 +187,7 @@ def user_info():
     cursor = connect.cursor()
 
     # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_body["uid"])
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
 
@@ -207,14 +207,14 @@ def user_info():
 @app.route("/user/update", methods=['POST'])
 def user_update():
     req_header = request.headers
-    req_body = request.form
+    req_param = request.form
 
     # 필수 parameter/headaer 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
         return header_verify_result
     user_update_required_parameters = ("uid", "name", "email_address")
-    param_verify_result = verify_parameters(user_update_required_parameters, req_body.keys())
+    param_verify_result = verify_parameters(user_update_required_parameters, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
     
@@ -223,18 +223,16 @@ def user_update():
     cursor = connect.cursor()
 
     # jwt 토큰 유효성 확인
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_body["uid"])
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
     
     # 유저 정보 UPDATE
-    cursor.execute("UPDATE user SET name='{}', email_address='{}' WHERE uid='{}'".format(req_body["name"], req_body["email_address"] ,req_body["uid"]))
+    cursor.execute("UPDATE user SET name='{}', email_address='{}' WHERE uid='{}'".format(req_param["name"], req_param["email_address"] ,req_param["uid"]))
     connect.commit()
 
-    u = cursor.fetchall()
-
     # userDTO 인스턴스 생성
-    user = userDTO(u[0])
+    user = userDTO(req_param["uid"], req_param["name"], req_param["email_address"])
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
