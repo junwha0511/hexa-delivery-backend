@@ -195,7 +195,7 @@ def user_info():
     u = cursor.fetchall()
     
     # userDTO 인스턴스 생성
-    user = userDTO(*u[0])
+    user = UserDTO(*u[0])
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
@@ -232,7 +232,7 @@ def user_update():
     connect.commit()
 
     # userDTO 인스턴스 생성
-    user = userDTO(req_param["uid"], req_param["name"], req_param["email_address"])
+    user = UserDTO(req_param["uid"], req_param["name"], req_param["email_address"])
 
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
@@ -458,7 +458,32 @@ def order_close():
 '''
 가게 검색
 '''
+@app.route("/store/search", methods=['GET'])
+def store_search():    
+    req_param = request.args.to_dict()
+    
+    # DB 연결
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
 
+    param_verify_result = verify_parameters(["query"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    query = req_param["query"]
+    
+    # 10개 select
+    cursor.execute("SELECT rid, name FROM restaurant WHERE name LIKE '%{}%' OR category LIKE '%{}%' LIMIT 10".format(query, query))
+    print("SELECT rid, name FROM restaurant WHERE name LIKE '%{}%' OR category LIKE '%{}%' LIMIT 10".format(query, query))
+    # RestaurantDTO 인스턴스 리스트 생성
+    restaurant_list = cursor.fetchall()
+    restaurant_list = [RestaurantDTO(*r).to_json() for r in restaurant_list]
+
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_200_OK
+    res[RES_DATA_KEY] = restaurant_list
+
+    return jsonify(res), status.HTTP_200_OK
 
 '''
 가게 추가
@@ -507,3 +532,7 @@ def store_create():
         res[RES_ERROR_MESSAGE] = "DB couldn't work now"
 
     return jsonify(res), res[RES_STATUS_KEY]
+
+
+if __name__ == "__main__":
+    app.run(port=7777)

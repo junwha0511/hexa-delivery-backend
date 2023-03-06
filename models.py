@@ -85,7 +85,7 @@ class OrderDetailDTO():
 
         return res
 
-class userDTO():
+class UserDTO():
     def __init__(self, uid, name, email_address):
         self.uid = uid
         self.name = name
@@ -95,5 +95,16 @@ class userDTO():
         res["uid"] = self.uid
         res["name"] = self.name
         res["email_address"] = self.email_address
+        
+        return res
+
+class RestaurantDTO:
+    def __init__(self, rid, name):
+        self.rid = rid
+        self.name = name
+    def to_json(self):
+        res = {}
+        res["rid"] = self.rid
+        res["name"] = self.name
         
         return res
