@@ -409,7 +409,51 @@ def order_detail():
 '''
 모임 마감
 '''
+# 모임 생성 페이지
+@app.route("/order/close", methods=['POST'])
+def order_close():
+    req_param = request.form
+    req_header = request.headers
+    
+    # 필수 parameter/header 확인
+    header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
+    if header_verify_result != None:
+        return header_verify_result
+    param_verify_result = verify_parameters(["oid", "uid"], req_param.keys())
+    if param_verify_result != None:
+        return param_verify_result
+    
+    # DB 연결   
+    connect = sqlite3.connect(DATABASE, isolation_level=None)
+    cursor = connect.cursor()
 
+    oid = req_param["oid"]
+    uid = req_param["uid"]
+    
+    # # Authentication
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], uid)
+    if verify_jwt_result != None:
+        return verify_jwt_result
+    
+    
+    cursor.execute("SELECT oid, uid FROM order_info WHERE oid={}".format(oid))
+    
+    order_result = cursor.fetchall()
+    
+    if len(order_result) == 0:
+        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "order not exists"}, status.HTTP_404_NOT_FOUND
+    if str(order_result[0][1]) != str(uid):
+        return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "order was not created by this user"}, status.HTTP_401_UNAUTHORIZED
+    
+    # INSERT to order_info 테이블
+    exp_time = datetime.now().isoformat()
+    cursor.execute("UPDATE order_info SET exp_time='{}' WHERE oid={}".format(exp_time, oid))
+    connect.commit()
+
+    res = {}
+    res[RES_STATUS_KEY] = status.HTTP_202_ACCEPTED
+    res[RES_DATA_KEY] = {"oid": oid, "closed_at": exp_time}
+    return jsonify(res), status.HTTP_202_ACCEPTED
 
 '''
 가게 검색
