@@ -1,12 +1,11 @@
 class OrderDAO():
-    def __init__(self, oid, exp_time, fee, location, group_link, rid, member_num, uid):
+    def __init__(self, oid, exp_time, fee, location, group_link, rid, uid):
         self.oid = oid
         self.exp_time = exp_time
         self.fee = fee
         self.location = location
         self.group_link = group_link
         self.rid = rid
-        self.member_num = member_num
         self.uid = uid
 
     def to_json(self):
@@ -17,7 +16,6 @@ class OrderDAO():
         res["location"] = self.location
         res["group_link"] = self.group_link
         res["rid"] = self.rid
-        res["member_num"] = self.member_num
         res["uid"] = self.uid
         return res
 
@@ -39,12 +37,11 @@ class OrderBriefDTO():
 
 # order 프리뷰 정보 DTO (게시판 전용)
 class OrderPreviewDTO():
-    def __init__(self, oid, name, category, exp_time, member_num, fee):
+    def __init__(self, oid, name, category, exp_time, fee):
         self.oid = oid
         self.name = name
         self.category = category
         self.exp_time = exp_time
-        self.member_num = member_num
         self.fee = fee    
 
     def to_json(self):
@@ -53,19 +50,17 @@ class OrderPreviewDTO():
         res["name"] = self.name
         res["category"] = self.category
         res["exp_time"] = self.exp_time
-        res["member_num"] = self.member_num      
         res["fee"] = self.fee
 
         return res
 
 # order 상세 정보 DTO
 class OrderDetailDTO():
-    def __init__(self, oid, name, exp_time, location, member_num, category, fee, menu_link, group_link):
+    def __init__(self, oid, name, exp_time, location, category, fee, menu_link, group_link):
         self.oid = oid
         self.name = name
         self.exp_time = exp_time
         self.location = location
-        self.member_num = member_num
         self.category = category
         self.fee = fee
         self.menu_link = menu_link
@@ -77,7 +72,6 @@ class OrderDetailDTO():
         res["name"] = self.name
         res["exp_time"] = self.exp_time
         res["location"] = self.location
-        res["member_num"] = self.member_num
         res["category"] = self.category
         res["fee"] = self.fee
         res["menu_link"] = self.menu_link

@@ -263,7 +263,7 @@ def my_page_list():
         return verify_jwt_result
     
     # uid와 연결된 oid 기반으로 order SELECT
-    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
+    cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
@@ -318,7 +318,7 @@ def board_list():
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
-    cursor.execute("SELECT oid, name, category, exp_time, member_num, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
+    cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
                    WHERE r.category='{}' AND Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT 10".format(req_param["category"], datetime.now().isoformat()))
 
     # OrderBreifDTO 인스턴스 리스트 생성
@@ -389,7 +389,7 @@ def order_detail():
     cursor = connect.cursor()
 
     # DB에서 oid 기반으로 order 정보 select
-    cursor.execute("SELECT oid, name, exp_time, location, member_num, category, fee, menu_link, group_link \
+    cursor.execute("SELECT oid, name, exp_time, location, category, fee, menu_link, group_link \
                     FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}' LIMIT 10".format(req["oid"]))
 
     o = cursor.fetchall()

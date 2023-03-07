@@ -26,7 +26,7 @@ def init_db():
 
     # Order info 테이블 생성
     cursor.execute("CREATE TABLE IF NOT EXISTS order_info \
-        (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, fee integer NOT NULL, location text NOT NULL, group_link text NOT NULL, rid integer, member_num integer NOT NULL, uid integer, \
+        (oid integer PRIMARY KEY, exp_time DATETIME NOT NULL, fee integer NOT NULL, location text NOT NULL, group_link text NOT NULL, rid integer, uid integer, \
             FOREIGN KEY (rid) REFERENCES restaurant(rid), FOREIGN KEY (uid) REFERENCES user(uid) )")
 
     
