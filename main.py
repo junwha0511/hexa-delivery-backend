@@ -298,7 +298,7 @@ def top_list():
     cursor = connect.cursor()
 
     # order 3개 select
-    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant WHERE Datetime(exp_time)>'{}' ORDER BY exp_time LIMIT 3".format(datetime.now().isoformat()))
+    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant ON order_info.rid=restaurant.rid WHERE Datetime(exp_time)>'{}' ORDER BY exp_time LIMIT 3".format(datetime.now().isoformat()))
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
