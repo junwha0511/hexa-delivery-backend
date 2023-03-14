@@ -59,8 +59,15 @@ def login_send_auth_number():
 
     # 새로운 유저일 경우 새 uid 생성 후 DB에 insert
     if(len(user) == 0):
-        cursor.execute("SELECT uid FROM user")
-        uid = len(cursor.fetchall()) + 1
+        cursor.execute("SELECT max(uid) FROM user_auth")
+        max_num = cursor.fetchall()
+        print(max_num)
+        uid = -1
+        if len(max_num) != 1:
+            uid = 0
+        else:
+            uid = max_num[0][0] + 1
+            print(uid)
         cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE'))
     else: # 기존 유저일 경우 기존 uid 선택 후 DB update
         uid = user[0][0]  
