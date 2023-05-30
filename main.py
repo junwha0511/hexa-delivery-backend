@@ -63,9 +63,9 @@ def login_send_auth_number():
         max_num = cursor.fetchall()
         print(max_num)
         uid = -1
-        if len(max_num) != 1:
+        if len(max_num) != 1 or max_num[0][0] == None:
             uid = 0
-        else:
+        else: 
             uid = max_num[0][0] + 1
             print(uid)
         cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE'))
