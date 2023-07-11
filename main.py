@@ -523,7 +523,7 @@ def store_create():
     rid = len(cursor.fetchall()) + 1
     
     # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], 1) # Only first user can create store (ADMIN)
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], 0) # Only first user can create store (ADMIN)
     if verify_jwt_result != None:
         return verify_jwt_result
     
