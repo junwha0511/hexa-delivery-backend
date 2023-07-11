@@ -188,19 +188,23 @@ def user_info():
     param_verify_result = verify_parameters(["uid"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-        
+    uid = req_param["uid"]
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
-
+    
     # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], uid)
     if verify_jwt_result != None:
         return verify_jwt_result
 
-    cursor.execute("SELECT * FROM user")
+    cursor.execute("SELECT * FROM user WHERE uid={}".format(uid))
     u = cursor.fetchall()
     
+    if len(u) == 0:
+        return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "user not exists"}, status.HTTP_404_NOT_FOUND
+        
     # userDTO 인스턴스 생성
     user = UserDTO(*u[0])
 
