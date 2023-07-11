@@ -11,6 +11,7 @@ from utils import *
 from models import *
 import bcrypt
 import jwt
+import ssl
 
 app = Flask(__name__)
 
@@ -32,16 +33,15 @@ def login_send_auth_number():
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: 'email validation error'}, status.HTTP_400_BAD_REQUEST
 
     # 인증번호 생성 및 email 발송
-    smtp = smtplib.SMTP('smtp.gmail.com', 587)
-    smtp.ehlo()
-    smtp.starttls()
-    smtp.login('hexa.delivery@gmail.com', GMAIL_APP_KEY)
+    context = ssl.create_default_context()
+    smtp = smtplib.SMTP_SSL('smtp.daum.net', 465, context=context)
+    smtp.login('apple0511h0511@daum.net', EMAIL_APP_KEY)
     auth_number = randrange(1000, 10000)
     msg = MIMEText('인증번호: {}\n\n앱으로 돌아가 인증번호를 입력해주세요!'.format(auth_number))
-    msg['From'] = 'hexa.delivery@gmail.com'
+    msg['From'] = 'admin@hexa.pro'
     msg['Subject'] = 'HeXA Delivery: 인증번호 확인'
     msg['To'] = req['email_address']
-    smtp.sendmail('hexa_delivery@naver.com', '{}'.format(req['email_address']), msg.as_string())
+    smtp.sendmail('admin@hexa.pro', '{}'.format(req['email_address']), msg.as_string())
     smtp.quit()
 
     # 만료시간은 현재시간 + 5분
