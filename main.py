@@ -28,7 +28,7 @@ def login_send_auth_number():
         return verify_result
     
     # email validation 실시. 이메일 형식을 따르며, 반드시 unist.ac.kr 이메일 이어야 함.
-    email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@.*')
+    email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@unist.ac.kr')
     if not email_validation.match(req['email_address']):
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: 'email validation error'}, status.HTTP_400_BAD_REQUEST
 
