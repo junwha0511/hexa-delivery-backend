@@ -96,9 +96,21 @@ class RestaurantDTO:
     def __init__(self, rid, name):
         self.rid = rid
         self.name = name
+        
     def to_json(self):
         res = {}
         res["rid"] = self.rid
         res["name"] = self.name
+        
+        return res
+
+class RestaurantInternalDTO(RestaurantDTO):
+    def __init__(self, rid, name, creator):
+        self.creator = creator
+        super().__init__(rid, name)
+        
+    def to_json(self):
+        res = super().to_json()
+        res["creator"] = self.creator
         
         return res
