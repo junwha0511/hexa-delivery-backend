@@ -519,6 +519,15 @@ def store_create():
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
+    # Check duplicate names
+    # TODO: set key as name
+    cursor.execute("SELECT * FROM restaurant WHERE name={}".format(req_param["name"]))
+    if len(cursor.fetchall()) > 0:
+        res = {}
+        res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
+        res[RES_ERROR_MESSAGE] = "the restaurant name is duplicated"
+        return jsonify(res), status.HTTP_400_BAD_REQUEST
+    
     cursor.execute("SELECT rid FROM restaurant")
     rid = len(cursor.fetchall()) + 1
     
