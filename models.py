@@ -56,14 +56,13 @@ class OrderPreviewDTO():
 
 # order 상세 정보 DTO
 class OrderDetailDTO():
-    def __init__(self, oid, name, exp_time, location, category, fee, menu_link, group_link):
+    def __init__(self, oid, name, exp_time, location, category, fee, group_link):
         self.oid = oid
         self.name = name
         self.exp_time = exp_time
         self.location = location
         self.category = category
         self.fee = fee
-        self.menu_link = menu_link
         self.group_link = group_link          
 
     def to_json(self):
@@ -74,7 +73,6 @@ class OrderDetailDTO():
         res["location"] = self.location
         res["category"] = self.category
         res["fee"] = self.fee
-        res["menu_link"] = self.menu_link
         res["group_link"] = self.group_link
 
         return res

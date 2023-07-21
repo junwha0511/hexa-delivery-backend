@@ -421,7 +421,7 @@ def order_detail():
     req = request.args.to_dict()
 
     # 필수 parameter 확인
-    param_verify_result = verify_parameters("oid", req.keys())
+    param_verify_result = verify_parameters(["oid"], req.keys())
     if param_verify_result != None:
         return param_verify_result
 
@@ -430,8 +430,8 @@ def order_detail():
     cursor = connect.cursor()
 
     # DB에서 oid 기반으로 order 정보 select
-    cursor.execute("SELECT oid, name, exp_time, location, category, fee, menu_link, group_link \
-                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}' LIMIT 10".format(req["oid"]))
+    cursor.execute("SELECT oid, name, exp_time, location, category, fee, group_link \
+                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}'".format(req["oid"]))
 
     o = cursor.fetchall()
 
