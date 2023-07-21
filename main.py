@@ -307,7 +307,6 @@ def top_list():
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
     order_list = [OrderBriefDTO(*o).to_json() for o in order_list]
-
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order_list
@@ -324,13 +323,27 @@ def board_list():
     if param_verify_result != None:
         return param_verify_result
     
+    offset = 0
+    
+    optional_param_verify_result = verify_parameters(["page"], req_param.keys())
+    if optional_param_verify_result == None:
+        error = False
+        try:
+            page = int(req_param["page"])-1
+        except:
+            error = True
+        if error or page < 0:
+            return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid page"}, status.HTTP_400_BAD_REQUEST
+                
+        offset = page*BOARD_LIMIT
+    
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
     cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-                   WHERE r.category='{}' AND Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT 10".format(req_param["category"], datetime.now().isoformat()))
+                   WHERE r.category='{}' AND Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(req_param["category"], datetime.now().isoformat(), BOARD_LIMIT, offset))
 
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
@@ -521,7 +534,7 @@ def store_create():
 
     # Check duplicate names
     # TODO: set key as name
-    cursor.execute("SELECT * FROM restaurant WHERE name={}".format(req_param["name"]))
+    cursor.execute("SELECT * FROM restaurant WHERE name=\"{}\"".format(req_param["name"])) # TODO: protect from format string explotation
     if len(cursor.fetchall()) > 0:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
