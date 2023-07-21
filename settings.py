@@ -22,3 +22,5 @@ EMAIL_APP_KEY = server_secure_config["EMAIL_APP_KEY"]
 
 DATETIME_FORMAT_STRING = '%m/%d/%Y'
 TOKEN_EXP_CYCLE = 90
+
+BOARD_LIMIT = 10
