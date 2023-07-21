@@ -316,34 +316,51 @@ def top_list():
 # 게시판 페이지
 @app.route("/order/list", methods=['GET'])
 def board_list():
+    PARAM_CATEGORY, PARAM_PAGE, PARAM_UID = "category", "page", "uid"
     req_param = request.args.to_dict()
 
-    # 필수 parameter 확인
-    param_verify_result = verify_parameters(["category"], req_param.keys())
-    if param_verify_result != None:
-        return param_verify_result
+    # [Optional Parameter] category 확인
+    category = None
+    category_param_verify_result = verify_parameters([PARAM_CATEGORY], req_param.keys())
+    if category_param_verify_result == None:
+        category = req_param[PARAM_CATEGORY]
+        if not category in ORDER_CATEGORY:
+            return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid category"}, status.HTTP_400_BAD_REQUEST
     
-    offset = 0
-    
-    optional_param_verify_result = verify_parameters(["page"], req_param.keys())
-    if optional_param_verify_result == None:
+    # [Optional Parameter] page 확인
+    page_offset = 0
+    page_param_verify_result = verify_parameters([PARAM_PAGE], req_param.keys())
+    if page_param_verify_result == None:
         error = False
         try:
-            page = int(req_param["page"])-1
+            page = int(req_param[PARAM_PAGE])-1
         except:
             error = True
         if error or page < 0:
             return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid page"}, status.HTTP_400_BAD_REQUEST
-                
-        offset = page*BOARD_LIMIT
+        page_offset = page*BOARD_LIMIT
+    
+    # [Optional Parameter] uid 확인
+    uid = None
+    uid_param_verify_result = verify_parameters([PARAM_UID], req_param.keys())
+    if uid_param_verify_result == None:
+        error = False
+        try:
+            uid = int(req_param[PARAM_UID])
+        except:
+            error = True
+        if error or uid < 0:
+            return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid uid"}, status.HTTP_400_BAD_REQUEST
     
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
+    category_condition = "" if category == None else "r.category={} AND".format(category)
+    uid_condition = "" if uid == None else "o.uid={} AND".format(uid)
     cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-                   WHERE r.category='{}' AND Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(req_param["category"], datetime.now().isoformat(), BOARD_LIMIT, offset))
+                   WHERE {} {} Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(category_condition, uid_condition, datetime.now().isoformat(), BOARD_LIMIT, page_offset))
 
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
