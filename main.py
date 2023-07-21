@@ -357,7 +357,7 @@ def board_list():
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
-    category_condition = "" if category == None else "r.category={} AND".format(category)
+    category_condition = "" if category == None else "r.category='{}' AND".format(category)
     uid_condition = "" if uid == None else "o.uid={} AND".format(uid)
     cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
                    WHERE {} {} Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(category_condition, uid_condition, datetime.now().isoformat(), BOARD_LIMIT, page_offset))
