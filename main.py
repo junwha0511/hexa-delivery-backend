@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request 
 from flask_api import status
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 # from flask_jwt_extended import JWTManager
 import smtplib
 from email.mime.text import MIMEText
@@ -14,11 +16,21 @@ import jwt
 import ssl
 
 app = Flask(__name__)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["1/second"]
+)
 
 init_db()
 
+@app.errorhandler(status.HTTP_429_TOO_MANY_REQUESTS)
+def ratelimit_handler(e):
+    return {RES_STATUS_KEY: status.HTTP_429_TOO_MANY_REQUESTS, RES_ERROR_MESSAGE: 'too many requests'}, status.HTTP_429_TOO_MANY_REQUESTS
+
 # 로그인 - 인증번호 전송
 @app.route("/login/send_auth_number", methods=['POST'])
+@limiter.limit("10/day", override_defaults=False) # maximum of 10 requests per day
 def login_send_auth_number():
     req = request.form
 
@@ -96,14 +108,14 @@ def verify_auth_number():
     cursor = connect.cursor()
     
     # DB에서 인증번호 유효성 확인
-    cursor.execute('SELECT uid, auth_number, exp_time FROM user_auth WHERE uid ="{}"'.format(req["uid"]))
+    cursor.execute('SELECT uid, auth_number, exp_time, email_address FROM user_auth WHERE uid ="{}"'.format(req["uid"]))
     user_auth_list = cursor.fetchall()
 
     # 존재하지 않는 uid
     if len(user_auth_list) == 0:
         return {RES_STATUS_KEY: status.HTTP_403_FORBIDDEN, RES_ERROR_MESSAGE: "uid not exists"}, status.HTTP_403_FORBIDDEN
     
-    uid, auth_number, exp_time = user_auth_list[0]
+    uid, auth_number, exp_time, email_address = user_auth_list[0]
 
     # 잘못된 인증번호
     if(auth_number != req["auth_number"]):
@@ -123,7 +135,7 @@ def verify_auth_number():
 
     # 새로운 유저
     if(len(u)==0):
-        cursor.execute("INSERT INTO user(uid) VALUES (?)", (uid,))
+        cursor.execute("INSERT INTO user(uid, email_address, name) VALUES (?, ?, ?)", (uid, email_address, email_address[:email_address.find("@")]))
     cursor.execute('UPDATE user_auth SET auth_time="{}" WHERE uid="{}"'.format(datetime.now().strftime(DATETIME_FORMAT_STRING), uid))
     
     connect.commit()
