@@ -65,7 +65,7 @@ def login_send_auth_number():
 
     # 이미 존재하는 유저인지 확인 (email_address 기반으로)
     req_email_address = req["email_address"]
-    cursor.execute('SELECT uid, email_address FROM user_auth WHERE email_address="{}"'.format(req_email_address))
+    cursor.execute('SELECT uid, email_address FROM user_auth WHERE email_address=?', (req_email_address,))
     user = cursor.fetchall()
     uid = -1
 
@@ -80,10 +80,10 @@ def login_send_auth_number():
         else: 
             uid = max_num[0][0] + 1
             print(uid)
-        cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE'))
+        cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE',))
     else: # 기존 유저일 경우 기존 uid 선택 후 DB update
         uid = user[0][0]  
-        cursor.execute("UPDATE user_auth SET exp_time='{}', auth_number='{}', verified='{}' WHERE uid='{}'".format(exp_time, auth_number, 'FALSE', uid))
+        cursor.execute("UPDATE user_auth SET exp_time=?, auth_number=?, verified=? WHERE uid=?", (exp_time, auth_number, 'FALSE', uid,))
     
     connect.commit()
     
@@ -108,7 +108,7 @@ def verify_auth_number():
     cursor = connect.cursor()
     
     # DB에서 인증번호 유효성 확인
-    cursor.execute('SELECT uid, auth_number, exp_time, email_address FROM user_auth WHERE uid ="{}"'.format(req["uid"]))
+    cursor.execute('SELECT uid, auth_number, exp_time, email_address FROM user_auth WHERE uid =?', (req["uid"],))
     user_auth_list = cursor.fetchall()
 
     # 존재하지 않는 uid
@@ -127,16 +127,16 @@ def verify_auth_number():
     
     # 유저 정보로 password 생성 + 테이블 업데이트
     encrypted_password = bcrypt.hashpw((str(uid) + str(auth_number)).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    cursor.execute("UPDATE user_auth SET verified='{}' WHERE uid={}".format("TRUE", uid))
+    cursor.execute("UPDATE user_auth SET verified=? WHERE uid=?", ("TRUE", uid,))
 
     # DB에 유저 정보 저장
-    cursor.execute('SELECT * FROM user WHERE uid={}'.format(uid))
+    cursor.execute('SELECT * FROM user WHERE uid=?', (uid,))
     u = cursor.fetchall()
 
     # 새로운 유저
     if(len(u)==0):
-        cursor.execute("INSERT INTO user(uid, email_address, name) VALUES (?, ?, ?)", (uid, email_address, email_address[:email_address.find("@")]))
-    cursor.execute('UPDATE user_auth SET auth_time="{}" WHERE uid="{}"'.format(datetime.now().strftime(DATETIME_FORMAT_STRING), uid))
+        cursor.execute("INSERT INTO user(uid, email_address, name) VALUES (?, ?, ?)", (uid, email_address, email_address[:email_address.find("@")],))
+    cursor.execute('UPDATE user_auth SET auth_time=? WHERE uid=?', (datetime.now().strftime(DATETIME_FORMAT_STRING), uid,))
     
     connect.commit()
 
@@ -211,7 +211,7 @@ def user_info():
     if verify_jwt_result != None:
         return verify_jwt_result
 
-    cursor.execute("SELECT * FROM user WHERE uid={}".format(uid))
+    cursor.execute("SELECT * FROM user WHERE uid=?", (uid,))
     u = cursor.fetchall()
     
     if len(u) == 0:
@@ -251,7 +251,7 @@ def user_update():
         return verify_jwt_result
     
     # 유저 정보 UPDATE
-    cursor.execute("UPDATE user SET name='{}', email_address='{}' WHERE uid='{}'".format(req_param["name"], req_param["email_address"] ,req_param["uid"]))
+    cursor.execute("UPDATE user SET name=?, email_address=? WHERE uid=?", (req_param["name"], req_param["email_address"] ,req_param["uid"],))
     connect.commit()
 
     # userDTO 인스턴스 생성
@@ -286,7 +286,7 @@ def my_page_list():
         return verify_jwt_result
     
     # uid와 연결된 oid 기반으로 order SELECT
-    cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info INNER JOIN restaurant WHERE uid='{}'".format(req_param["uid"]))
+    cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info INNER JOIN restaurant WHERE uid=?", (req_param["uid"],))
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
@@ -314,7 +314,7 @@ def top_list():
     cursor = connect.cursor()
 
     # order 3개 select
-    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant ON order_info.rid=restaurant.rid WHERE Datetime(exp_time)>'{}' ORDER BY exp_time LIMIT 3".format(datetime.now().isoformat()))
+    cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant ON order_info.rid=restaurant.rid WHERE Datetime(exp_time)>? ORDER BY exp_time LIMIT 3", (datetime.now().isoformat(),))
     
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
@@ -369,11 +369,25 @@ def board_list():
     cursor = connect.cursor()
 
     # 카테고리에 속한 order 10개 select
-    category_condition = "" if category == None else "r.category='{}' AND".format(category)
-    uid_condition = "" if uid == None else "o.uid={} AND".format(uid)
-    cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-                   WHERE {} {} Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(category_condition, uid_condition, datetime.now().isoformat(), BOARD_LIMIT, page_offset))
+    params = []
 
+    if category is not None:
+        category_condition = "r.category=? AND"
+        params.append(category)
+    else:
+        category_condition = ""
+
+    if uid is not None:
+        uid_condition = "o.uid=? AND"
+        params.append(uid)
+    else:
+        uid_condition = ""
+
+    query = "SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
+        WHERE {} {} Datetime(o.exp_time)>'{}' ORDER BY exp_time LIMIT {} OFFSET {}".format(category_condition, uid_condition, datetime.now().isoformat(), BOARD_LIMIT, page_offset)
+
+    cursor.execute(query, params)
+    
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
     order_list = [OrderPreviewDTO(*o).to_json() for o in order_list]
@@ -443,7 +457,7 @@ def order_detail():
 
     # DB에서 oid 기반으로 order 정보 select
     cursor.execute("SELECT oid, name, exp_time, location, category, fee, group_link \
-                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid='{}'".format(req["oid"]))
+                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid=?", (req["oid"],))
 
     o = cursor.fetchall()
 
@@ -489,7 +503,7 @@ def order_close():
         return verify_jwt_result
     
     
-    cursor.execute("SELECT oid, uid FROM order_info WHERE oid={}".format(oid))
+    cursor.execute("SELECT oid, uid FROM order_info WHERE oid=?", (oid,))
     
     order_result = cursor.fetchall()
     
@@ -500,7 +514,7 @@ def order_close():
     
     # INSERT to order_info 테이블
     exp_time = datetime.now().isoformat()
-    cursor.execute("UPDATE order_info SET exp_time='{}' WHERE oid={}".format(exp_time, oid))
+    cursor.execute("UPDATE order_info SET exp_time=? WHERE oid=?", (exp_time, oid,))
     connect.commit()
 
     res = {}
@@ -526,8 +540,8 @@ def store_search():
     query = req_param["query"]
     
     # 10개 select
-    cursor.execute("SELECT rid, name FROM restaurant WHERE name LIKE '%{}%' OR category LIKE '%{}%' LIMIT 10".format(query, query))
-    print("SELECT rid, name FROM restaurant WHERE name LIKE '%{}%' OR category LIKE '%{}%' LIMIT 10".format(query, query))
+    cursor.execute("SELECT rid, name FROM restaurant WHERE name LIKE ? OR category LIKE ? LIMIT 10", ('%'+query+'%', '%'+query+'%',))
+
     # RestaurantDTO 인스턴스 리스트 생성
     restaurant_list = cursor.fetchall()
     restaurant_list = [RestaurantDTO(*r).to_json() for r in restaurant_list]
@@ -563,7 +577,7 @@ def store_create():
 
     # Check duplicate names
     # TODO: set key as name
-    cursor.execute("SELECT * FROM restaurant WHERE name=\"{}\"".format(req_param["name"])) # TODO: protect from format string explotation
+    cursor.execute("SELECT * FROM restaurant WHERE name=?", (req_param["name"],)) # TODO: protect from format string explotation
     if len(cursor.fetchall()) > 0:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
