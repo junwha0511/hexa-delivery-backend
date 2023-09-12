@@ -2,7 +2,7 @@
 from dotenv import dotenv_values
 import bcrypt
 
-server_secure_config = dotenv_values(".env") 
+server_secure_config = dotenv_values("/keys/.env") 
 
 DATABASE = "test.db"
 

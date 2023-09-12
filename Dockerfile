@@ -6,9 +6,6 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 RUN pip3 install gevent gunicorn
 # COPY .env ./
-EXPOSE 7777
 
 WORKDIR /hexa-delivery-backend
-ENTRYPOINT ["gunicorn", "main:app", "--access-logfile", "access.log", "--error-logfile", "error.log", "-b", "0.0.0.0:7777", "-w", "4", "--timeout=10", "-k", "gevent"]
-
-
+ENTRYPOINT ["gunicorn", "main:app", "--access-logfile", "/server/access.log", "--error-logfile", "/server/error.log", "-b", "0.0.0.0:7777", "-w", "4", "--timeout=10", "-k", "gevent"]
