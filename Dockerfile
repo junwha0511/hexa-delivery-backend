@@ -6,5 +6,8 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 # COPY .env ./
 
+# Timezone setting
+RUN ln -snf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+
 WORKDIR /hexa-delivery-backend
 ENTRYPOINT ["gunicorn", "main:app", "--access-logfile", "/server/access.log", "--error-logfile", "/server/error.log", "-b", "0.0.0.0:7777", "-w", "4", "--timeout=10", "-k", "gevent"]
