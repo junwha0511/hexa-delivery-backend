@@ -4,7 +4,6 @@ RUN apt-get -y update && apt-get -y install git
 RUN git clone https://github.com/junwha0511/hexa-delivery-backend
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
-RUN pip3 install gevent gunicorn
 # COPY .env ./
 
 WORKDIR /hexa-delivery-backend
