@@ -1,6 +1,6 @@
 # HeXA 밥시켜유
 
-### Usage
+### Usage (docker)
 `./build.sh`
 
 `./run.sh`
