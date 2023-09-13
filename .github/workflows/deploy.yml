@@ -25,5 +25,5 @@ jobs:
       - name: Deploy
         uses: fjogeleit/http-request-action@v1.14.1
         with:
-          url: 'https://deploy.hexa.pro?service=hexa-delivery'
+          url: 'https://deploy.hexa.pro/deploy?service=hexa-delivery'
           method: 'GET'
