@@ -1,6 +1,6 @@
 # hexa-delivery
 ### Usage
-`docker build -t hexa-delivery ./`
+`./build.sh`
 
 `./run.sh`
 
