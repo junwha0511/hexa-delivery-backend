@@ -1,4 +1,5 @@
-# hexa-delivery
+# HeXA 밥시켜유
+
 ### Usage
 `./build.sh`
 
@@ -6,3 +7,4 @@
 
 ### Contributors
 홍준화, 구대희
+
