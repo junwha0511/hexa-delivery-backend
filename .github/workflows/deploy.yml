@@ -27,3 +27,4 @@ jobs:
         with:
           url: 'https://deploy.hexa.pro/deploy?service=hexa-delivery'
           method: 'GET'
+          timeout: 600000 # 10 min
