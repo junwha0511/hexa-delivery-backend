@@ -4,7 +4,7 @@ import bcrypt
 
 server_secure_config = dotenv_values("/keys/.env") 
 
-DATABASE = "test.db"
+DATABASE = "/server/test.db"
 
 ORDER_DAO_REQUIRED_PARAMETERS = ("oid", "exp_time", "fee", "location", "group_link", "rid", "uid")
 RESTAURANT_DAO_REQUIRED_PARAMETERS = ("rid", "name", "category", "creator")
