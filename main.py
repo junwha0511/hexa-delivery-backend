@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request 
+from flask import Flask, jsonify, request
 from flask_api import status
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
 # from flask_jwt_extended import JWTManager
 import smtplib
 from email.mime.text import MIMEText
@@ -14,46 +15,45 @@ from models import *
 import bcrypt
 import jwt
 import ssl
+from flask import Flask
 
 app = Flask(__name__)
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["1/second"]
-)
+limiter = Limiter(get_remote_address, app=app, default_limits=["1/second"])
 
 init_db()
 
+
 @app.errorhandler(status.HTTP_429_TOO_MANY_REQUESTS)
 def ratelimit_handler(e):
-    return {RES_STATUS_KEY: status.HTTP_429_TOO_MANY_REQUESTS, RES_ERROR_MESSAGE: 'too many requests'}, status.HTTP_429_TOO_MANY_REQUESTS
+    return {RES_STATUS_KEY: status.HTTP_429_TOO_MANY_REQUESTS, RES_ERROR_MESSAGE: "too many requests"}, status.HTTP_429_TOO_MANY_REQUESTS
+
 
 # 로그인 - 인증번호 전송
-@app.route("/login/send_auth_number", methods=['POST'])
-@limiter.limit("10/day", override_defaults=False) # maximum of 10 requests per day
+@app.route("/login/send_auth_number", methods=["POST"])
+@limiter.limit("10/day", override_defaults=False)  # maximum of 10 requests per day
 def login_send_auth_number():
     req = request.form
 
-    # 필수 parameter 확인: email_address 
+    # 필수 parameter 확인: email_address
     verify_result = verify_parameters(["email_address"], req.keys())
     if verify_result != None:
         return verify_result
-    
+
     # email validation 실시. 이메일 형식을 따르며, 반드시 unist.ac.kr 이메일 이어야 함.
-    email_validation = re.compile('^[a-zA-Z0-9+-\_.]+@unist.ac.kr')
-    if not email_validation.match(req['email_address']):
-        return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: 'email validation error'}, status.HTTP_400_BAD_REQUEST
+    email_validation = re.compile("^[a-zA-Z0-9+-\_.]+@unist.ac.kr")
+    if not email_validation.match(req["email_address"]):
+        return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "email validation error"}, status.HTTP_400_BAD_REQUEST
 
     # 인증번호 생성 및 email 발송
     context = ssl.create_default_context()
-    smtp = smtplib.SMTP_SSL('smtp.daum.net', 465, context=context)
-    smtp.login('apple0511h0511@daum.net', EMAIL_APP_KEY)
+    smtp = smtplib.SMTP_SSL("smtp.daum.net", 465, context=context)
+    smtp.login("apple0511h0511@daum.net", EMAIL_APP_KEY)
     auth_number = randrange(1000, 10000)
-    msg = MIMEText('인증번호: {}\n\n앱으로 돌아가 인증번호를 입력해주세요!'.format(auth_number))
-    msg['From'] = 'admin@hexa.pro'
-    msg['Subject'] = 'HeXA Delivery: 인증번호 확인'
-    msg['To'] = req['email_address']
-    smtp.sendmail('admin@hexa.pro', '{}'.format(req['email_address']), msg.as_string())
+    msg = MIMEText("인증번호: {}\n\n앱으로 돌아가 인증번호를 입력해주세요!".format(auth_number))
+    msg["From"] = "admin@hexa.pro"
+    msg["Subject"] = "HeXA Delivery: 인증번호 확인"
+    msg["To"] = req["email_address"]
+    smtp.sendmail("admin@hexa.pro", "{}".format(req["email_address"]), msg.as_string())
     smtp.quit()
 
     # 만료시간은 현재시간 + 5분
@@ -65,35 +65,53 @@ def login_send_auth_number():
 
     # 이미 존재하는 유저인지 확인 (email_address 기반으로)
     req_email_address = req["email_address"]
-    cursor.execute('SELECT uid, email_address FROM user_auth WHERE email_address=?', (req_email_address,))
+    cursor.execute("SELECT uid, email_address FROM user_auth WHERE email_address=?", (req_email_address,))
     user = cursor.fetchall()
     uid = -1
 
     # 새로운 유저일 경우 새 uid 생성 후 DB에 insert
-    if(len(user) == 0):
+    if len(user) == 0:
         cursor.execute("SELECT max(uid) FROM user_auth")
         max_num = cursor.fetchall()
         print(max_num)
         uid = -1
         if len(max_num) != 1 or max_num[0][0] == None:
             uid = 0
-        else: 
+        else:
             uid = max_num[0][0] + 1
             print(uid)
-        cursor.execute("INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)", (uid, req_email_address, exp_time, auth_number, 'FALSE',))
-    else: # 기존 유저일 경우 기존 uid 선택 후 DB update
-        uid = user[0][0]  
-        cursor.execute("UPDATE user_auth SET exp_time=?, auth_number=?, verified=? WHERE uid=?", (exp_time, auth_number, 'FALSE', uid,))
-    
+        cursor.execute(
+            "INSERT INTO user_auth(uid, email_address, exp_time, auth_number, verified) VALUES(?, ?, ?, ?, ?)",
+            (
+                uid,
+                req_email_address,
+                exp_time,
+                auth_number,
+                "FALSE",
+            ),
+        )
+    else:  # 기존 유저일 경우 기존 uid 선택 후 DB update
+        uid = user[0][0]
+        cursor.execute(
+            "UPDATE user_auth SET exp_time=?, auth_number=?, verified=? WHERE uid=?",
+            (
+                exp_time,
+                auth_number,
+                "FALSE",
+                uid,
+            ),
+        )
+
     connect.commit()
-    
+
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
     res[RES_DATA_KEY] = {"uid": uid, "exp_time": exp_time}
     return jsonify(res), status.HTTP_201_CREATED
 
+
 # 로그인 - 인증번호 확인
-@app.route("/login/verify_auth_number", methods=['POST'])
+@app.route("/login/verify_auth_number", methods=["POST"])
 def verify_auth_number():
     req = request.form
 
@@ -102,67 +120,89 @@ def verify_auth_number():
     verify_result = verify_parameters(auth_required_parameter, req.keys())
     if verify_result != None:
         return verify_result
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
-    
+
     # DB에서 인증번호 유효성 확인
-    cursor.execute('SELECT uid, auth_number, exp_time, email_address FROM user_auth WHERE uid =?', (req["uid"],))
+    cursor.execute("SELECT uid, auth_number, exp_time, email_address FROM user_auth WHERE uid =?", (req["uid"],))
     user_auth_list = cursor.fetchall()
 
     # 존재하지 않는 uid
     if len(user_auth_list) == 0:
         return {RES_STATUS_KEY: status.HTTP_403_FORBIDDEN, RES_ERROR_MESSAGE: "uid not exists"}, status.HTTP_403_FORBIDDEN
-    
+
     uid, auth_number, exp_time, email_address = user_auth_list[0]
 
     # 잘못된 인증번호
-    if(auth_number != req["auth_number"]):
+    if auth_number != req["auth_number"]:
         return {RES_STATUS_KEY: status.HTTP_417_EXPECTATION_FAILED, RES_ERROR_MESSAGE: "wrong authentication number"}, status.HTTP_417_EXPECTATION_FAILED
-    
+
     # 인증시간이 만료됨
-    if(datetime.strptime(exp_time, '%Y-%m-%d %H:%M:%S.%f') < datetime.now()):
+    if datetime.strptime(exp_time, "%Y-%m-%d %H:%M:%S.%f") < datetime.now():
         return {RES_STATUS_KEY: status.HTTP_410_GONE, RES_ERROR_MESSAGE: "expired authentication number."}, status.HTTP_410_GONE
-    
+
     # 유저 정보로 password 생성 + 테이블 업데이트
     encrypted_password = bcrypt.hashpw((str(uid) + str(auth_number)).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    cursor.execute("UPDATE user_auth SET verified=? WHERE uid=?", ("TRUE", uid,))
+    cursor.execute(
+        "UPDATE user_auth SET verified=? WHERE uid=?",
+        (
+            "TRUE",
+            uid,
+        ),
+    )
 
     # DB에 유저 정보 저장
-    cursor.execute('SELECT * FROM user WHERE uid=?', (uid,))
+    cursor.execute("SELECT * FROM user WHERE uid=?", (uid,))
     u = cursor.fetchall()
 
     # 새로운 유저
-    if(len(u)==0):
-        cursor.execute("INSERT INTO user(uid, email_address, name) VALUES (?, ?, ?)", (uid, email_address, email_address[:email_address.find("@")],))
-    cursor.execute('UPDATE user_auth SET auth_time=? WHERE uid=?', (datetime.now().strftime(DATETIME_FORMAT_STRING), uid,))
-    
+    if len(u) == 0:
+        cursor.execute(
+            "INSERT INTO user(uid, email_address, name) VALUES (?, ?, ?)",
+            (
+                uid,
+                email_address,
+                email_address[: email_address.find("@")],
+            ),
+        )
+    cursor.execute(
+        "UPDATE user_auth SET auth_time=? WHERE uid=?",
+        (
+            datetime.now().strftime(DATETIME_FORMAT_STRING),
+            uid,
+        ),
+    )
+
     connect.commit()
 
     # password를 포함하여 JWT token 발행
     password_json = {
-    "password": encrypted_password,
+        "password": encrypted_password,
     }
     jwt_token = jwt.encode(password_json, JWT_SECRET_KEY, algorithm="HS256")
-    
+
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_201_CREATED
     res[RES_DATA_KEY] = {"uid": uid, HEADER_ACCESS_TOKEN: jwt_token}
     return jsonify(res), status.HTTP_201_CREATED
 
+
 # 자동로그인 확인
 
-'''
+"""
 - jwt token을 헤더로 받음
 - jwt token이 오늘 유효한지 확인 (오늘 내 만료일 경우 갱신 필요하다는 문구 GONE)
 - 모두 유효할 경우 200 OK  
-'''
-@app.route("/login/login", methods=['GET'])
+"""
+
+
+@app.route("/login/login", methods=["GET"])
 def login():
     req_param = request.args.to_dict()
     req_header = request.headers
-    
+
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
@@ -170,8 +210,8 @@ def login():
     param_verify_result = verify_parameters(["uid"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
-    # DB 연결   
+
+    # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
@@ -179,16 +219,17 @@ def login():
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
-    
+
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = "ok"
 
     return res, status.HTTP_200_OK
 
+
 # 유저 정보 확인
 # null인지 확인해서 수정 요청 status 412
-@app.route("/user/info", methods=['GET'])
+@app.route("/user/info", methods=["GET"])
 def user_info():
     req_header = request.headers
     req_param = request.args.to_dict()
@@ -201,11 +242,11 @@ def user_info():
     if param_verify_result != None:
         return param_verify_result
     uid = req_param["uid"]
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
-    
+
     # Authentication
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], uid)
     if verify_jwt_result != None:
@@ -213,10 +254,10 @@ def user_info():
 
     cursor.execute("SELECT * FROM user WHERE uid=?", (uid,))
     u = cursor.fetchall()
-    
+
     if len(u) == 0:
         return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "user not exists"}, status.HTTP_404_NOT_FOUND
-        
+
     # userDTO 인스턴스 생성
     user = UserDTO(*u[0])
 
@@ -227,7 +268,7 @@ def user_info():
 
 
 # 유저 정보 업데이트
-@app.route("/user/update", methods=['POST'])
+@app.route("/user/update", methods=["POST"])
 def user_update():
     req_header = request.headers
     req_param = request.form
@@ -240,7 +281,7 @@ def user_update():
     param_verify_result = verify_parameters(user_update_required_parameters, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -249,9 +290,16 @@ def user_update():
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
-    
+
     # 유저 정보 UPDATE
-    cursor.execute("UPDATE user SET name=?, email_address=? WHERE uid=?", (req_param["name"], req_param["email_address"] ,req_param["uid"],))
+    cursor.execute(
+        "UPDATE user SET name=?, email_address=? WHERE uid=?",
+        (
+            req_param["name"],
+            req_param["email_address"],
+            req_param["uid"],
+        ),
+    )
     connect.commit()
 
     # userDTO 인스턴스 생성
@@ -262,12 +310,13 @@ def user_update():
     res[RES_DATA_KEY] = user.to_json()
     return jsonify(res)
 
+
 # 유저 - 주문 리스트
-@app.route("/user/list", methods=['GET'])
+@app.route("/user/list", methods=["GET"])
 def my_page_list():
     req_param = request.args.to_dict()
     req_header = request.headers
-    
+
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
@@ -275,8 +324,8 @@ def my_page_list():
     param_verify_result = verify_parameters(["uid"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
-    # DB 연결   
+
+    # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
@@ -284,10 +333,10 @@ def my_page_list():
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
-    
+
     # uid와 연결된 oid 기반으로 order SELECT
     cursor.execute("SELECT oid, name, category, exp_time, fee FROM order_info INNER JOIN restaurant WHERE uid=?", (req_param["uid"],))
-    
+
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
     order_list = [OrderPreviewDTO(*o).to_json() for o in order_list]
@@ -298,24 +347,27 @@ def my_page_list():
 
     return jsonify(res), status.HTTP_200_OK
 
-'''
+
+"""
 TODO(junwha): 테스트용 모임 dummy data 생성 스크립트 필요
 TODO(junwha): 모임 마감 기준을 exp_time으로 잡고, 결과 필터링시 datetime.now()보다 앞선 것들만 조회
-'''
+"""
 # 메인 페이지
-'''
+"""
 상위 3개 LIMIT으로 일부 정보만 SELECT
-'''
+"""
+
+
 # 게시판 페이지
-@app.route("/order/top_list", methods=['GET'])
-def top_list():    
+@app.route("/order/top_list", methods=["GET"])
+def top_list():
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # order 3개 select
     cursor.execute("SELECT oid, name, exp_time FROM order_info INNER JOIN restaurant ON order_info.rid=restaurant.rid WHERE Datetime(exp_time)>Datetime(?) ORDER BY exp_time LIMIT 3", (datetime.now().isoformat(),))
-    
+
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
     order_list = [OrderBriefDTO(*o).to_json() for o in order_list]
@@ -325,8 +377,9 @@ def top_list():
 
     return jsonify(res), status.HTTP_200_OK
 
+
 # 게시판 페이지
-@app.route("/order/list", methods=['GET'])
+@app.route("/order/list", methods=["GET"])
 def board_list():
     PARAM_CATEGORY, PARAM_PAGE, PARAM_UID = "category", "page", "uid"
     req_param = request.args.to_dict()
@@ -338,20 +391,20 @@ def board_list():
         category = req_param[PARAM_CATEGORY]
         if not category in ORDER_CATEGORY:
             return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid category"}, status.HTTP_400_BAD_REQUEST
-    
+
     # [Optional Parameter] page 확인
     page_offset = 0
     page_param_verify_result = verify_parameters([PARAM_PAGE], req_param.keys())
     if page_param_verify_result == None:
         error = False
         try:
-            page = int(req_param[PARAM_PAGE])-1
+            page = int(req_param[PARAM_PAGE]) - 1
         except:
             error = True
         if error or page < 0:
             return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid page"}, status.HTTP_400_BAD_REQUEST
-        page_offset = page*BOARD_LIMIT
-    
+        page_offset = page * BOARD_LIMIT
+
     # [Optional Parameter] uid 확인
     uid = None
     uid_param_verify_result = verify_parameters([PARAM_UID], req_param.keys())
@@ -363,7 +416,7 @@ def board_list():
             error = True
         if error or uid < 0:
             return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "invalid uid"}, status.HTTP_400_BAD_REQUEST
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -382,12 +435,14 @@ def board_list():
         params.append(uid)
     else:
         uid_condition = ""
-    
+
     query = "SELECT oid, name, category, exp_time, fee FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid \
-        WHERE {} {} Datetime(o.exp_time)>Datetime(?) ORDER BY exp_time LIMIT {} OFFSET {}".format(category_condition, uid_condition, BOARD_LIMIT, page_offset)
+        WHERE {} {} Datetime(o.exp_time)>Datetime(?) ORDER BY exp_time LIMIT {} OFFSET {}".format(
+        category_condition, uid_condition, BOARD_LIMIT, page_offset
+    )
 
     cursor.execute(query, (*params, datetime.now().isoformat()))
-    
+
     # OrderBreifDTO 인스턴스 리스트 생성
     order_list = cursor.fetchall()
     order_list = [OrderPreviewDTO(*o).to_json() for o in order_list]
@@ -400,11 +455,11 @@ def board_list():
 
 
 # 모임 생성 페이지
-@app.route("/order/create", methods=['POST'])
+@app.route("/order/create", methods=["POST"])
 def order_create():
     req_param = request.form
     req_header = request.headers
-    
+
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
@@ -414,8 +469,8 @@ def order_create():
     param_verify_result = verify_parameters(required_params, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
-    # DB 연결   
+
+    # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
@@ -423,16 +478,15 @@ def order_create():
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["uid"])
     if verify_jwt_result != None:
         return verify_jwt_result
-    
+
     # OrderDAO 인스턴스 생성
     cursor.execute("SELECT oid FROM order_info")
     oid = len(cursor.fetchall()) + 1
     param_data = [oid if param_name == "oid" else req_param[param_name] for param_name in ORDER_DAO_REQUIRED_PARAMETERS]
     new_order = OrderDAO(*param_data)
-    
+
     # INSERT to order_info 테이블
-    cursor.execute("INSERT INTO order_info({}) VALUES({})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(ORDER_DAO_REQUIRED_PARAMETERS))),
-                   param_data)
+    cursor.execute("INSERT INTO order_info({}) VALUES({})".format(",".join(ORDER_DAO_REQUIRED_PARAMETERS), ",".join(["?"] * len(ORDER_DAO_REQUIRED_PARAMETERS))), param_data)
     connect.commit()
 
     res = {}
@@ -442,7 +496,7 @@ def order_create():
 
 
 # 모임 상세 페이지
-@app.route("/order/detail", methods=['GET'])
+@app.route("/order/detail", methods=["GET"])
 def order_detail():
     req = request.args.to_dict()
 
@@ -456,32 +510,38 @@ def order_detail():
     cursor = connect.cursor()
 
     # DB에서 oid 기반으로 order 정보 select
-    cursor.execute("SELECT oid, name, exp_time, location, category, fee, group_link \
-                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid=?", (req["oid"],))
+    cursor.execute(
+        "SELECT oid, name, exp_time, location, category, fee, group_link \
+                    FROM order_info AS o INNER JOIN restaurant AS r ON o.rid=r.rid WHERE o.oid=?",
+        (req["oid"],),
+    )
 
     o = cursor.fetchall()
 
     # 존재하지 않는 oid
-    if(len(o) == 0):
+    if len(o) == 0:
         return {RES_STATUS_KEY: status.HTTP_400_BAD_REQUEST, RES_ERROR_MESSAGE: "not exist oid"}, status.HTTP_400_BAD_REQUEST
 
     # OrderDetailDTO 인스턴스 생성
     order = OrderDetailDTO(*o[0])
-    
+
     res = {}
     res[RES_STATUS_KEY] = status.HTTP_200_OK
     res[RES_DATA_KEY] = order.to_json()
     return jsonify(res), status.HTTP_200_OK
 
-'''
+
+"""
 모임 마감
-'''
+"""
+
+
 # 모임 생성 페이지
-@app.route("/order/close", methods=['POST'])
+@app.route("/order/close", methods=["POST"])
 def order_close():
     req_param = request.form
     req_header = request.headers
-    
+
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
@@ -489,32 +549,37 @@ def order_close():
     param_verify_result = verify_parameters(["oid", "uid"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
-    # DB 연결   
+
+    # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     oid = req_param["oid"]
     uid = req_param["uid"]
-    
+
     # # Authentication
     verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], uid)
     if verify_jwt_result != None:
         return verify_jwt_result
-    
-    
+
     cursor.execute("SELECT oid, uid FROM order_info WHERE oid=?", (oid,))
-    
+
     order_result = cursor.fetchall()
-    
+
     if len(order_result) == 0:
         return {RES_STATUS_KEY: status.HTTP_404_NOT_FOUND, RES_ERROR_MESSAGE: "order not exists"}, status.HTTP_404_NOT_FOUND
     if str(order_result[0][1]) != str(uid):
         return {RES_STATUS_KEY: status.HTTP_401_UNAUTHORIZED, RES_ERROR_MESSAGE: "order was not created by this user"}, status.HTTP_401_UNAUTHORIZED
-    
+
     # INSERT to order_info 테이블
     exp_time = datetime.now().isoformat()
-    cursor.execute("UPDATE order_info SET exp_time=? WHERE oid=?", (exp_time, oid,))
+    cursor.execute(
+        "UPDATE order_info SET exp_time=? WHERE oid=?",
+        (
+            exp_time,
+            oid,
+        ),
+    )
     connect.commit()
 
     res = {}
@@ -522,13 +587,16 @@ def order_close():
     res[RES_DATA_KEY] = {"oid": oid, "closed_at": exp_time}
     return jsonify(res), status.HTTP_202_ACCEPTED
 
-'''
+
+"""
 가게 검색
-'''
-@app.route("/store/search", methods=['GET'])
-def store_search():    
+"""
+
+
+@app.route("/store/search", methods=["GET"])
+def store_search():
     req_param = request.args.to_dict()
-    
+
     # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
@@ -536,11 +604,17 @@ def store_search():
     param_verify_result = verify_parameters(["query"], req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
+
     query = req_param["query"]
-    
+
     # 10개 select
-    cursor.execute("SELECT rid, name FROM restaurant WHERE name LIKE ? OR category LIKE ? LIMIT 10", ('%'+query+'%', '%'+query+'%',))
+    cursor.execute(
+        "SELECT rid, name FROM restaurant WHERE name LIKE ? OR category LIKE ? LIMIT 10",
+        (
+            "%" + query + "%",
+            "%" + query + "%",
+        ),
+    )
 
     # RestaurantDTO 인스턴스 리스트 생성
     restaurant_list = cursor.fetchall()
@@ -552,15 +626,18 @@ def store_search():
 
     return jsonify(res), status.HTTP_200_OK
 
-'''
+
+"""
 가게 추가
-'''
+"""
+
+
 # 모임 생성 페이지
-@app.route("/store/create", methods=['POST'])
+@app.route("/store/create", methods=["POST"])
 def store_create():
     req_param = request.form
     req_header = request.headers
-        
+
     # 필수 parameter/header 확인
     header_verify_result = verify_parameters([HEADER_ACCESS_TOKEN], req_header.keys(), is_header=True)
     if header_verify_result != None:
@@ -570,35 +647,35 @@ def store_create():
     param_verify_result = verify_parameters(required_params, req_param.keys())
     if param_verify_result != None:
         return param_verify_result
-    
-    # DB 연결   
+
+    # DB 연결
     connect = sqlite3.connect(DATABASE, isolation_level=None)
     cursor = connect.cursor()
 
     # Check duplicate names
     # TODO: set key as name
-    cursor.execute("SELECT * FROM restaurant WHERE name=?", (req_param["name"],)) # TODO: protect from format string explotation
+    cursor.execute("SELECT * FROM restaurant WHERE name=?", (req_param["name"],))  # TODO: protect from format string explotation
     if len(cursor.fetchall()) > 0:
         res = {}
         res[RES_STATUS_KEY] = status.HTTP_400_BAD_REQUEST
         res[RES_ERROR_MESSAGE] = "the restaurant name is duplicated"
         return jsonify(res), status.HTTP_400_BAD_REQUEST
-    
+
     cursor.execute("SELECT rid FROM restaurant")
     rid = len(cursor.fetchall()) + 1
-    
+
     # Authentication
-    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["creator"]) # Verify user has valid token
+    verify_jwt_result = verify_access_token_with_user(cursor, req_header[HEADER_ACCESS_TOKEN], req_param["creator"])  # Verify user has valid token
     if verify_jwt_result != None:
         return verify_jwt_result
-    
+
     # INSERT to order_info 테이블
-    values = [rid if param=="rid" else req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
-    
+    values = [rid if param == "rid" else req_param[param] for param in RESTAURANT_DAO_REQUIRED_PARAMETERS]
+
     result = True
-    cursor.execute("INSERT INTO restaurant({}) VALUES({})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"]*len(RESTAURANT_DAO_REQUIRED_PARAMETERS))), values)
+    cursor.execute("INSERT INTO restaurant({}) VALUES({})".format(",".join(RESTAURANT_DAO_REQUIRED_PARAMETERS), ",".join(["?"] * len(RESTAURANT_DAO_REQUIRED_PARAMETERS))), values)
     connect.commit()
-  
+
     res = {}
     if result:
         res[RES_STATUS_KEY] = status.HTTP_201_CREATED
