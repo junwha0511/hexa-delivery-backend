@@ -16,8 +16,10 @@ import bcrypt
 import jwt
 import ssl
 from flask import Flask
+from test import test_bp
 
 app = Flask(__name__)
+app.register_blueprint(test_bp)
 limiter = Limiter(get_remote_address, app=app, default_limits=["1/second"])
 
 init_db()
@@ -688,4 +690,4 @@ def store_create():
 
 
 if __name__ == "__main__":
-    app.run(port=7777)
+    app.run("0.0.0.0", port=7777)
